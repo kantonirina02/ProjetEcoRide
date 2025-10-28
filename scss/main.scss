@@ -22,3 +22,77 @@ footer{
 p{
     font-family: $font-family-sans-serif;
 }
+.presentation {
+    margin-top: 20px;
+    padding: 20px;
+}
+.square-image {
+    width: 300px;
+    height: 300px;
+    object-fit: cover;
+    flex-shrink: 0; 
+    border-radius: 20px;
+}
+.search-bar {
+    display: flex;
+    align-items: center;
+    margin-top: 50px;
+    padding: 20px;
+    border-radius: 5px;
+    justify-content: center;
+}
+.search-bar button:hover {
+    background: $secondary;
+    color: $dark;
+}
+.search-bar button {
+    cursor: pointer;
+    border-radius: 3px;
+}
+.search-bar {
+    flex: 1;
+    margin:10px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+}
+.search-bar, .search-bar button {
+    outline: none;
+    padding: 8px;
+}
+input, select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+    
+    &:focus {
+        border-color: $primary;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba($primary, 0.2);
+    }
+}
+
+@media (max-width: 768px) { 
+    .square-image {
+        width: 150px;
+        height: 150px;
+    }
+    .search-bar {
+        flex-direction: column;
+        width: 100%;
+        padding: 10px;
+    }
+    .search-bar input {
+        width: 100%;
+        margin: 5px;
+        font-size: 14px;
+        padding: 8px;
+    }
+    .search-bar button {
+        width: 100%;
+        font-size: 14px;
+        padding: 8px;
+    }
+}
