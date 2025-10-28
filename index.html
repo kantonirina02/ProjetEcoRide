@@ -7,10 +7,44 @@
     <title>Document</title>
 </head>
 <body>
-    <header>
-
+    <header class="bg-primary text-white py-3">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-dark p-0">
+                <a class="navbar-brand h3 mb-0" href="/" data-link>EcoRide</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a href="/" class="nav-link" data-link>Accueil</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/covoiturages" class="nav-link" data-link>Covoiturages</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/#contact-footer" class="nav-link">Contact</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/mentions-legales" class="nav-link" data-link>Mentions légales</a>
+                        </li>
+                        <li class="nav-item" data-show-disconnected>
+                            <a href="/signin" class="nav-link" data-link>Connexion</a>
+                        </li>
+                        <li class="nav-item" data-show-disconnected>
+                            <a href="/signup" class="nav-link" data-link>Inscription</a>
+                        </li>
+                        <li class="nav-item" data-show-connected>
+                            <a href="/account" class="nav-link" data-link>Mon Profil</a>
+                        </li>
+                        <li class="nav-item" data-show-connected>
+                            <a href="#" onclick="signout()" class="nav-link">Déconnexion</a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
     </header>
-
     <main id="main-page">
         <!-- Le contenu de la page sera injectée ici-->
     </main>
