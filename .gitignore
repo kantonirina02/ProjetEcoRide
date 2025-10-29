@@ -1,1 +1,8 @@
-node_modules
+node_modulesbackend/vendor/
+backend/var/
+backend/node_modules/
+backend/public/build/
+backend/.env.local
+
+.vscode/
+.idea/
