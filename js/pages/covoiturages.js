@@ -1,5 +1,7 @@
 import { fetchRides, bookRide } from "../api.js";
 
+const getSession = () => (window.__session ?? null);
+
 const $form = document.getElementById("rideSearchForm");
 const $from = document.getElementById("departure");
 const $to   = document.getElementById("arrival");
@@ -8,7 +10,7 @@ const $err  = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
 
-// --- Pré-remplissage via query string (from, to, date)
+// Pré-remplissage via querystring
 (function prefillFromQuery() {
   const q = new URLSearchParams(window.location.search);
   if (q.has("from")) $from.value = q.get("from");
@@ -67,13 +69,24 @@ async function render() {
 function bindBookButtons() {
   document.querySelectorAll(".js-book").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      // contrôle "auth"
+      const session = getSession();
+      if (!session || !session.user) {
+        alert("Connecte-toi d'abord pour réserver.");
+        if (typeof window.navigate === "function") {
+          window.navigate("/signin");  
+        } else {
+          window.location.href = "/signin"; // fallback
+        }
+        return;
+      }
+
       const id = Number(btn.dataset.id);
       btn.disabled = true;
       const old = btn.textContent;
       btn.textContent = "…";
       try {
-        // TODO: remplacer 1 par l'ID du user connecté quand l'auth sera en place
-        const res = await bookRide(id, { userId: 1, seats: 1 });
+        const res = await bookRide(id, { userId: session.user.id, seats: 1 });
         alert(`Réservation OK ! Places restantes : ${res.seatsLeft}`);
         await render();
       } catch (e) {
@@ -93,7 +106,7 @@ if ($form) {
     render();
   });
 
-  // Si la page vient de Home avec des query params, on lance directement
+  // Si on arrive avec ?from&to&date → lancer direct
   if ($from.value || $to.value || $date.value) {
     render();
   }

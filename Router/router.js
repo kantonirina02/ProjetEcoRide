@@ -1,8 +1,10 @@
 import Route from "./Route.js";
 import { allRoutes, websiteName } from "./allRoutes.js";
 
-const route404 = new Route("404", "Page introuvable", "pages/404.html");
+// Route 404
+const route404 = new Route("404", "Page introuvable", "/pages/404.html");
 
+// Trouver la route correspondant à une URL
 const getRouteByUrl = (url) => {
   let currentRoute = null;
   allRoutes.forEach((r) => {
@@ -11,35 +13,58 @@ const getRouteByUrl = (url) => {
   return currentRoute ?? route404;
 };
 
+// Charge le HTML et le JS de la page courante
 const LoadContentPage = async () => {
   const path = window.location.pathname;
   const actualRoute = getRouteByUrl(path);
 
-  const html = await fetch(actualRoute.pathHtml).then((res) => res.text());
+  // Injecte le HTML
+  const html = await fetch(actualRoute.pathHtml).then((r) => r.text());
   document.getElementById("main-page").innerHTML = html;
 
-  // charge le JS associé à la page si présent
-  if (actualRoute.pathJS && actualRoute.pathJS !== "") {
-    const scriptTag = document.createElement("script");
-    scriptTag.type = "module";             // on utilise des modules ES6
-    scriptTag.src = actualRoute.pathJS;
-    document.body.appendChild(scriptTag);
+  if (actualRoute.pathJS) {
+    document
+      .querySelectorAll(`script[data-page-js]`)
+      .forEach((s) => s.remove());
+
+    const s = document.createElement("script");
+    s.type = "module";
+    s.src = actualRoute.pathJS;
+    s.dataset.pageJs = actualRoute.pathJS;
+    document.body.appendChild(s);
   }
 
+  // Titre
   document.title = `${actualRoute.title} - ${websiteName}`;
 };
 
-// Intercepte tous les liens SPA
-const onClick = (event) => {
-  const a = event.target.closest('a[data-link]');
-  if (!a) return;
-  event.preventDefault();
-  window.history.pushState({}, "", a.getAttribute("href"));
+// Navigation SPA réutilisable
+function navigate(href) {
+  window.history.pushState({}, "", href);
   LoadContentPage();
+}
+
+// Gestion des liens <a data-link>
+const delegateLinks = () => {
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[data-link]');
+    if (!a) return;
+    e.preventDefault();
+    navigate(a.getAttribute("href"));
+  });
 };
 
-window.addEventListener("popstate", LoadContentPage);
-document.addEventListener("click", onClick);
+// API globale
+const routeEvent = (event) => {
+  event = event || window.event;
+  event.preventDefault();
+  navigate(event.target.href);
+};
 
-// 1er rendu
+window.onpopstate = LoadContentPage;
+window.route = routeEvent;   
+window.navigate = navigate;  
+
+// Bootstrap du router
+delegateLinks();
 LoadContentPage();
