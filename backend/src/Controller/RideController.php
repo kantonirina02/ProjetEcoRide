@@ -1,71 +1,84 @@
 <?php
+
 namespace App\Controller;
 
-use App\Document\SearchLog;
-use App\Service\SearchLogger;
-use Doctrine\ODM\MongoDB\DocumentManager;
+use App\Repository\RideRepository;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Annotation\Route;
 
-final class RideController
+#[Route('/api', name: 'api_')]
+class RideController extends AbstractController
 {
-    public function __construct(private SearchLogger $logger) {}
-
-    #[Route('/api/rides', name: 'api_rides_list', methods: ['GET'])]
-    public function list(Request $request): JsonResponse
+    #[Route('/health', name: 'health', methods: ['GET'])]
+    public function health(): JsonResponse
     {
-        $from = (string) $request->query->get('from', '');
-$to   = (string) $request->query->get('to', '');
-$date = new \DateTimeImmutable((string) $request->query->get('date', (new \DateTime())->format('Y-m-d')));
-
-$rides = $rideRepository->searchAvailable($from, $to, $date);
-
-return $this->json(array_map(static function(Ride $r) {
-    return [
-        'id'         => $r->getId(),
-        'from'       => $r->getFromCity(),
-        'to'         => $r->getToCity(),
-        'startAt'    => $r->getStartAt()->format(DATE_ATOM),
-        'price'      => (string) $r->getPrice(),
-        'seatsLeft'  => $r->getSeatsLeft(),
-        'vehicle'    => $r->getVehicle()->getModel(),
-        'eco'        => $r->getVehicle()->isEco(),
-        'driver'     => $r->getDriver()->getPseudo(),
-    ];
-}, $rides));
-
-
-        // Règle métier: n’afficher que les trajets avec >= 1 place restante
-        $results = array_values(array_filter($mock, fn($r)=> ($r['seats_left']??0) >= 1));
-
-        // Journalisation NoSQL (Mongo)
-        $this->logger->log($from, $to, $date, \count($results), null);
-
-        if (!$results) {
-            return new JsonResponse([
-                'suggestions' => [['date' => (new \DateTimeImmutable($date ?: 'now +1 day'))->format('Y-m-d'), 'count' => 0]],
-                'query' => compact('from','to','date'),
-            ]);
-        }
-        return new JsonResponse($results);
+        return $this->json([
+            'status'  => 'ok',
+            'version' => 'v1',
+            'time'    => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ]);
     }
 
-    // Endpoint debug (optionnel) pour vérifier les logs
-    #[Route('/api/debug/search-logs', name: 'api_debug_search_logs', methods: ['GET'])]
-    public function logs(DocumentManager $dm): JsonResponse
+    /**
+     * GET /api/rides?from=Paris&to=Lille&date=2025-11-10
+     * – from / to : filtre exact sur les villes (case-insensitive)
+     * – date : YYYY-MM-DD (on sélectionne les trajets qui démarrent ce jour-là)
+     */
+    #[Route('/rides', name: 'rides', methods: ['GET'])]
+    public function list(Request $req, RideRepository $repo): JsonResponse
     {
-        $docs = $dm->getRepository(SearchLog::class)->findBy([], ['createdAt'=>'DESC'], 5);
-        $out=[];
-        foreach ($docs as $d) {
-            $out[] = [
-                'from'=>$d->getFrom(),
-                'to'=>$d->getTo(),
-                'date'=>$d->getDate(),
-                'resultCount'=>$d->getResultCount(),
-                'createdAt'=>$d->getCreatedAt()->format(DATE_ATOM),
-            ];
+        $from = $req->query->get('from');
+        $to   = $req->query->get('to');
+        $date = $req->query->get('date'); // YYYY-MM-DD
+
+        $qb = $repo->createQueryBuilder('r')
+            ->addSelect('v', 'b', 'd')
+            ->join('r.vehicle', 'v')
+            ->join('v.brand', 'b')
+            ->join('r.driver', 'd')
+            ->orderBy('r.startAt', 'ASC');
+
+        if ($from) {
+            $qb->andWhere('LOWER(r.fromCity) = LOWER(:from)')->setParameter('from', $from);
         }
-        return new JsonResponse($out);
+        if ($to) {
+            $qb->andWhere('LOWER(r.toCity) = LOWER(:to)')->setParameter('to', $to);
+        }
+        if ($date) {
+            $start = new \DateTimeImmutable($date.' 00:00:00');
+            $end   = new \DateTimeImmutable($date.' 23:59:59');
+            $qb->andWhere('r.startAt BETWEEN :s AND :e')
+               ->setParameter('s', $start)->setParameter('e', $end);
+        }
+
+        $rides = $qb->getQuery()->getResult();
+
+        // petite normalisation JSON
+        $data = array_map(function($r) {
+            return [
+                'id'         => $r->getId(),
+                'from'       => $r->getFromCity(),
+                'to'         => $r->getToCity(),
+                'startAt'    => $r->getStartAt()?->format('Y-m-d H:i'),
+                'endAt'      => $r->getEndAt()?->format('Y-m-d H:i'),
+                'price'      => (float)$r->getPrice(),
+                'seatsLeft'  => $r->getSeatsLeft(),
+                'seatsTotal' => $r->getSeatsTotal(),
+                'status'     => $r->getStatus(),
+                'vehicle'    => [
+                    'brand' => $r->getVehicle()->getBrand()->getName(),
+                    'model' => $r->getVehicle()->getModel(),
+                    'eco'   => $r->getVehicle()->isEco(),
+                ],
+                'driver'     => [
+                    'id'     => $r->getDriver()->getId(),
+                    'pseudo' => $r->getDriver()->getPseudo(),
+                ],
+            ];
+        }, $rides);
+
+        return $this->json($data);
     }
 }
