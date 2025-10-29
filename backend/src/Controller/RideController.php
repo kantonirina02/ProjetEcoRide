@@ -15,24 +15,26 @@ final class RideController
     #[Route('/api/rides', name: 'api_rides_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $from = (string)$request->query->get('from', '');
-        $to   = (string)$request->query->get('to', '');
-        $date = (string)$request->query->get('date', '');
+        $from = (string) $request->query->get('from', '');
+$to   = (string) $request->query->get('to', '');
+$date = new \DateTimeImmutable((string) $request->query->get('date', (new \DateTime())->format('Y-m-d')));
 
-        // MOCK minimal pour démarrer
-        $mock = [[
-            'id'=>1,
-            'driver'=>['pseudo'=>'Alice','photo'=>'/img/alice.png','note'=>4.8],
-            'seats_left'=>2, 'price'=>18.5,
-            'start_at'=>'2025-11-01T08:00:00+01:00', 'end_at'=>'2025-11-01T10:30:00+01:00',
-            'eco'=>true,
-        ],[
-            'id'=>2,
-            'driver'=>['pseudo'=>'Bob','photo'=>'/img/bob.png','note'=>4.3],
-            'seats_left'=>0, 'price'=>15,
-            'start_at'=>'2025-11-01T09:00:00+01:00', 'end_at'=>'2025-11-01T11:50:00+01:00',
-            'eco'=>false,
-        ]];
+$rides = $rideRepository->searchAvailable($from, $to, $date);
+
+return $this->json(array_map(static function(Ride $r) {
+    return [
+        'id'         => $r->getId(),
+        'from'       => $r->getFromCity(),
+        'to'         => $r->getToCity(),
+        'startAt'    => $r->getStartAt()->format(DATE_ATOM),
+        'price'      => (string) $r->getPrice(),
+        'seatsLeft'  => $r->getSeatsLeft(),
+        'vehicle'    => $r->getVehicle()->getModel(),
+        'eco'        => $r->getVehicle()->isEco(),
+        'driver'     => $r->getDriver()->getPseudo(),
+    ];
+}, $rides));
+
 
         // Règle métier: n’afficher que les trajets avec >= 1 place restante
         $results = array_values(array_filter($mock, fn($r)=> ($r['seats_left']??0) >= 1));
