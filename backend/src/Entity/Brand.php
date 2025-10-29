@@ -21,7 +21,7 @@ class Brand
     private ?string $name = null;
 
     /** @var Collection<int, Vehicle> */
-    #[ORM\OneToMany(targetEntity: Vehicle::class, mappedBy: 'brand', orphanRemoval: false)]
+    #[ORM\OneToMany(targetEntity: Vehicle::class, mappedBy: 'brand')]
     private Collection $vehicles;
 
     public function __construct()
@@ -36,23 +36,8 @@ class Brand
 
     /** @return Collection<int, Vehicle> */
     public function getVehicles(): Collection { return $this->vehicles; }
-
     public function addVehicle(Vehicle $vehicle): self
-    {
-        if (!$this->vehicles->contains($vehicle)) {
-            $this->vehicles->add($vehicle);
-            $vehicle->setBrand($this);
-        }
-        return $this;
-    }
-
+    { if(!$this->vehicles->contains($vehicle)){ $this->vehicles->add($vehicle); $vehicle->setBrand($this);} return $this; }
     public function removeVehicle(Vehicle $vehicle): self
-    {
-        if ($this->vehicles->removeElement($vehicle)) {
-            if ($vehicle->getBrand() === $this) {
-                $vehicle->setBrand(null);
-            }
-        }
-        return $this;
-    }
+    { if($this->vehicles->removeElement($vehicle) && $vehicle->getBrand() === $this){ $vehicle->setBrand(null);} return $this; }
 }

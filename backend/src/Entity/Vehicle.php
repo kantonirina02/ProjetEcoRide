@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\VehicleRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: VehicleRepository::class)]
@@ -16,38 +18,43 @@ class Vehicle
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: User::class)]
-    #[ORM\JoinColumn(name: 'owner_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'vehicles')]
+    #[ORM\JoinColumn(name: 'owner_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
     private ?User $owner = null;
 
     #[ORM\ManyToOne(targetEntity: Brand::class, inversedBy: 'vehicles')]
     #[ORM\JoinColumn(name: 'brand_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
     private ?Brand $brand = null;
 
-    // Plaque: unique & non nullable
-    #[ORM\Column(type: 'string', length: 20)]
+    #[ORM\Column(length: 20, nullable: true)]
     private ?string $plate = null;
 
-    #[ORM\Column(type: 'string', length: 100)]
+    #[ORM\Column(length: 100)]
     private ?string $model = null;
 
-    // essence | diesel | electrique | hybride...
-    #[ORM\Column(type: 'string', length: 30)]
+    #[ORM\Column(length: 30)]
     private ?string $energy = null;
 
-    // nombre de places totales (unsigned)
     #[ORM\Column(type: 'integer', options: ['unsigned' => true])]
     private ?int $seatsTotal = null;
 
-    #[ORM\Column(type: 'string', length: 30, nullable: true)]
+    #[ORM\Column(length: 30, nullable: true)]
     private ?string $color = null;
 
-    // vrai si véhicule "écologique" (électrique)
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $eco = false;
 
     #[ORM\Column(type: 'date_immutable')]
     private ?\DateTimeImmutable $firstRegistrationAt = null;
+
+    /** @var Collection<int, Ride> */
+    #[ORM\OneToMany(mappedBy: 'vehicle', targetEntity: Ride::class)]
+    private Collection $rides;
+
+    public function __construct()
+    {
+        $this->rides = new ArrayCollection();
+    }
 
     public function getId(): ?int { return $this->id; }
 
@@ -58,7 +65,7 @@ class Vehicle
     public function setBrand(?Brand $brand): self { $this->brand = $brand; return $this; }
 
     public function getPlate(): ?string { return $this->plate; }
-    public function setPlate(string $plate): self { $this->plate = $plate; return $this; }
+    public function setPlate(?string $plate): self { $this->plate = $plate; return $this; }
 
     public function getModel(): ?string { return $this->model; }
     public function setModel(string $model): self { $this->model = $model; return $this; }
@@ -76,9 +83,10 @@ class Vehicle
     public function setEco(bool $eco): self { $this->eco = $eco; return $this; }
 
     public function getFirstRegistrationAt(): ?\DateTimeImmutable { return $this->firstRegistrationAt; }
-    public function setFirstRegistrationAt(\DateTimeImmutable $firstRegistrationAt): self
-    {
-        $this->firstRegistrationAt = $firstRegistrationAt;
-        return $this;
-    }
+    public function setFirstRegistrationAt(\DateTimeImmutable $d): self { $this->firstRegistrationAt = $d; return $this; }
+
+    /** @return Collection<int, Ride> */
+    public function getRides(): Collection { return $this->rides; }
+    public function addRide(Ride $r): self { if(!$this->rides->contains($r)){ $this->rides->add($r); $r->setVehicle($this);} return $this; }
+    public function removeRide(Ride $r): self { if($this->rides->removeElement($r) && $r->getVehicle() === $this){ $r->setVehicle(null);} return $this; }
 }
