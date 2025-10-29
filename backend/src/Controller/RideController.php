@@ -2,10 +2,14 @@
 
 namespace App\Controller;
 
+use App\Entity\Ride;
+use App\Entity\RideParticipant;
 use App\Repository\RideRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route('/api', name: 'api_')]
@@ -21,17 +25,28 @@ class RideController extends AbstractController
         ]);
     }
 
+    #[Route('/debug/echo', name: 'debug_echo', methods: ['POST'])]
+    public function debugEcho(Request $req): JsonResponse
+    {
+        return $this->json([
+            'method'  => $req->getMethod(),
+            'headers' => $req->headers->all(),
+            'content' => $req->getContent(),         // ce que PHP reçoit réellement
+            'params'  => $req->request->all(),       // form-data x-www-form-urlencoded
+            'query'   => $req->query->all(),         // ?a=1&b=2
+            'ctype'   => $req->headers->get('content-type'),
+        ]);
+    }
+
     /**
      * GET /api/rides?from=Paris&to=Lille&date=2025-11-10
-     * – from / to : filtre exact sur les villes (case-insensitive)
-     * – date : YYYY-MM-DD (on sélectionne les trajets qui démarrent ce jour-là)
      */
-    #[Route('/rides', name: 'rides', methods: ['GET'])]
+    #[Route('/rides', name: 'rides_list', methods: ['GET'])]
     public function list(Request $req, RideRepository $repo): JsonResponse
     {
         $from = $req->query->get('from');
         $to   = $req->query->get('to');
-        $date = $req->query->get('date'); // YYYY-MM-DD
+        $date = $req->query->get('date');
 
         $qb = $repo->createQueryBuilder('r')
             ->addSelect('v', 'b', 'd')
@@ -47,23 +62,26 @@ class RideController extends AbstractController
             $qb->andWhere('LOWER(r.toCity) = LOWER(:to)')->setParameter('to', $to);
         }
         if ($date) {
-            $start = new \DateTimeImmutable($date.' 00:00:00');
-            $end   = new \DateTimeImmutable($date.' 23:59:59');
-            $qb->andWhere('r.startAt BETWEEN :s AND :e')
-               ->setParameter('s', $start)->setParameter('e', $end);
+            try {
+                $start = new \DateTimeImmutable($date.' 00:00:00');
+                $end   = new \DateTimeImmutable($date.' 23:59:59');
+                $qb->andWhere('r.startAt BETWEEN :s AND :e')
+                   ->setParameter('s', $start)->setParameter('e', $end);
+            } catch (\Exception $e) {
+                return $this->json(['error' => 'Invalid date format, expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
+            }
         }
 
         $rides = $qb->getQuery()->getResult();
 
-        // petite normalisation JSON
-        $data = array_map(function($r) {
+        $data = array_map(static function (Ride $r): array {
             return [
                 'id'         => $r->getId(),
                 'from'       => $r->getFromCity(),
                 'to'         => $r->getToCity(),
                 'startAt'    => $r->getStartAt()?->format('Y-m-d H:i'),
                 'endAt'      => $r->getEndAt()?->format('Y-m-d H:i'),
-                'price'      => (float)$r->getPrice(),
+                'price'      => (float) $r->getPrice(),
                 'seatsLeft'  => $r->getSeatsLeft(),
                 'seatsTotal' => $r->getSeatsTotal(),
                 'status'     => $r->getStatus(),
@@ -80,5 +98,125 @@ class RideController extends AbstractController
         }, $rides);
 
         return $this->json($data);
+    }
+
+    /**
+     * POST /api/rides/{id}/book
+     * Body JSON: { "userId": 1, "seats": 1 }
+     */
+    #[Route('/rides/{id}/book', name: 'ride_book', methods: ['POST'])]
+    public function book(
+        int $id,
+        Request $req,
+        RideRepository $rides,
+        EntityManagerInterface $em
+    ): JsonResponse {
+        /** @var Ride|null $ride */
+        $ride = $rides->find($id);
+        if (!$ride) {
+            return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Parseur ultra-tolérant : JSON -> form-data -> query
+        $userId = 0;
+        $seats  = 0;
+
+        $raw = $req->getContent() ?? '';
+
+        if ($raw !== '') {
+            try {
+                $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($decoded)) {
+                    $userId = (int)($decoded['userId'] ?? 0);
+                    $seats  = (int)($decoded['seats'] ?? 0);
+                }
+            } catch (\JsonException) {
+                // on ignore, on essaiera d'autres sources
+            }
+        }
+
+        if ($userId <= 0 || $seats <= 0) {
+            // x-www-form-urlencoded
+            $formUserId = $req->request->get('userId');
+            $formSeats  = $req->request->get('seats');
+            if ($formUserId !== null || $formSeats !== null) {
+                $userId = (int)$formUserId;
+                $seats  = (int)$formSeats;
+            }
+        }
+
+        if ($userId <= 0 || $seats <= 0) {
+            // fallback query string: /book?userId=1&seats=1
+            $qsUserId = $req->query->get('userId');
+            $qsSeats  = $req->query->get('seats');
+            if ($qsUserId !== null || $qsSeats !== null) {
+                $userId = (int)$qsUserId;
+                $seats  = (int)$qsSeats;
+            }
+        }
+
+        if ($userId <= 0 || $seats <= 0) {
+            return $this->json([
+                'error' => 'Invalid payload (provide JSON {"userId":<int>,"seats":<int>} or form/query params)'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $em->beginTransaction();
+
+            /** @var Ride|null $ride */
+            $ride = $em->getRepository(Ride::class)->find($id);
+            if (!$ride) {
+                $em->rollback();
+                return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+            }
+
+            if ($ride->getSeatsLeft() < $seats) {
+                $em->rollback();
+                return $this->json(['error' => 'Not enough seats'], Response::HTTP_CONFLICT);
+            }
+
+            $userRef = $em->getReference(\App\Entity\User::class, $userId);
+
+            $existing = $em->getRepository(RideParticipant::class)->findOneBy([
+                'ride' => $ride,
+                'user' => $userRef,
+            ]);
+            if ($existing) {
+                $em->rollback();
+                return $this->json(['error' => 'Already booked'], Response::HTTP_CONFLICT);
+            }
+
+            $participant = (new RideParticipant())
+                ->setRide($ride)
+                ->setUser($userRef)
+                ->setSeatsBooked($seats)
+                ->setCreditsUsed(0)
+                ->setStatus('confirmed');
+
+            $ride->setSeatsLeft($ride->getSeatsLeft() - $seats);
+
+            $em->persist($participant);
+            $em->persist($ride);
+            $em->flush();
+            $em->commit();
+
+            return $this->json([
+                'ok'        => true,
+                'rideId'    => $ride->getId(),
+                'userId'    => $userId,
+                'seats'     => $seats,
+                'seatsLeft' => $ride->getSeatsLeft(),
+                'status'    => 'confirmed',
+            ], Response::HTTP_CREATED);
+        } catch (\Throwable $e) {
+            if ($em->getConnection()->isTransactionActive()) {
+                $em->rollback();
+            }
+            return $this->json([
+                'error'  => 'Booking failed',
+                'detail' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }
