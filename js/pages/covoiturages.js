@@ -1,13 +1,20 @@
-// js/pages/covoiturages.js
 import { fetchRides, bookRide } from "../api.js";
 
 const $form = document.getElementById("rideSearchForm");
 const $from = document.getElementById("departure");
-const $to = document.getElementById("arrival");
+const $to   = document.getElementById("arrival");
 const $date = document.getElementById("date");
-const $err = document.getElementById("search-error-covoit");
+const $err  = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
+
+// --- Pré-remplissage via query string (from, to, date)
+(function prefillFromQuery() {
+  const q = new URLSearchParams(window.location.search);
+  if (q.has("from")) $from.value = q.get("from");
+  if (q.has("to"))   $to.value   = q.get("to");
+  if (q.has("date")) $date.value = q.get("date");
+})();
 
 function card(r) {
   const price = typeof r.price === "number" ? r.price.toFixed(2) : r.price;
@@ -38,7 +45,7 @@ async function render() {
   try {
     const items = await fetchRides({
       from: $from.value.trim(),
-      to: $to.value.trim(),
+      to:   $to.value.trim(),
       date: $date.value,
     });
 
@@ -65,7 +72,7 @@ function bindBookButtons() {
       const old = btn.textContent;
       btn.textContent = "…";
       try {
-        // TODO: remplacer 1 par l'ID de l'utilisateur connecté quand l'auth sera en place
+        // TODO: remplacer 1 par l'ID du user connecté quand l'auth sera en place
         const res = await bookRide(id, { userId: 1, seats: 1 });
         alert(`Réservation OK ! Places restantes : ${res.seatsLeft}`);
         await render();
@@ -85,6 +92,9 @@ if ($form) {
     e.preventDefault();
     render();
   });
-  // Premier affichage (optionnel) :
-  render();
+
+  // Si la page vient de Home avec des query params, on lance directement
+  if ($from.value || $to.value || $date.value) {
+    render();
+  }
 }
