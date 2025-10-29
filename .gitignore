@@ -1,4 +1,5 @@
-node_modulesbackend/vendor/
+node_modules
+backend/vendor/
 backend/var/
 backend/node_modules/
 backend/public/build/
