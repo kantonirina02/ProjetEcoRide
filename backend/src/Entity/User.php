@@ -1,0 +1,72 @@
+<?php
+
+namespace App\Entity;
+
+use App\Repository\UserRepository;
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity(repositoryClass: UserRepository::class)]
+#[ORM\Table(name: 'users')]
+#[ORM\UniqueConstraint(name: 'uniq_users_email', columns: ['email'])]
+class User
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
+    private ?int $id = null;
+
+    // Email unique
+    #[ORM\Column(type: 'string', length: 180)]
+    private ?string $email = null;
+
+    // Mot de passe hashé (string)
+    #[ORM\Column(type: 'string', length: 255)]
+    private ?string $password = null;
+
+    // Pseudo affiché
+    #[ORM\Column(type: 'string', length: 100)]
+    private ?string $pseudo = null;
+
+    // Téléphone optionnel
+    #[ORM\Column(type: 'string', length: 20, nullable: true)]
+    private ?string $phone = null;
+
+    // Solde de crédits (entier)
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $creditsBalance = 0;
+
+    // Timestamps
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $updatedAt = null;
+
+    public function __construct()
+    {
+        $this->createdAt = new \DateTimeImmutable('now');
+    }
+
+    public function getId(): ?int { return $this->id; }
+
+    public function getEmail(): ?string { return $this->email; }
+    public function setEmail(string $email): self { $this->email = $email; return $this; }
+
+    public function getPassword(): ?string { return $this->password; }
+    public function setPassword(string $password): self { $this->password = $password; return $this; }
+
+    public function getPseudo(): ?string { return $this->pseudo; }
+    public function setPseudo(string $pseudo): self { $this->pseudo = $pseudo; return $this; }
+
+    public function getPhone(): ?string { return $this->phone; }
+    public function setPhone(?string $phone): self { $this->phone = $phone; return $this; }
+
+    public function getCreditsBalance(): int { return $this->creditsBalance; }
+    public function setCreditsBalance(int $creditsBalance): self { $this->creditsBalance = $creditsBalance; return $this; }
+
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function setCreatedAt(\DateTimeImmutable $createdAt): self { $this->createdAt = $createdAt; return $this; }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+    public function setUpdatedAt(?\DateTimeImmutable $updatedAt): self { $this->updatedAt = $updatedAt; return $this; }
+}

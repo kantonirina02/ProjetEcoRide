@@ -1,0 +1,33 @@
+# config/services.yaml
+# Entry point pour configurer tes services applicatifs
+
+parameters:
+  # Utilise les mêmes clés que ta config ODM (doctrine_mongodb.yaml)
+  env(MONGODB_URL): 'mongodb://127.0.0.1:27017'
+  env(MONGODB_DB):  'ecoride'
+
+services:
+  # Par défaut : autowire + autoconfigure
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  # Enregistre tous les services de src/ sauf ce qu'on exclut
+  App\:
+    resource: '../src/'
+    exclude:
+      - '../src/DependencyInjection/'
+      - '../src/Entity/'
+      - '../src/Kernel.php'
+
+  # Très important : déclarer les contrôleurs comme services publics + taggés
+  App\Controller\:
+    resource: '../src/Controller/'
+    public: true
+    tags: ['controller.service_arguments']
+
+  # (exemples de services explicites si tu veux surcharger plus tard)
+  # App\Service\SearchLogger:
+  #   arguments:
+  #     $dm: '@doctrine_mongodb.odm.document_manager'
+  #     $stack: '@request_stack'
