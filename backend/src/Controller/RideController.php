@@ -31,22 +31,25 @@ class RideController extends AbstractController
         return $this->json([
             'method'  => $req->getMethod(),
             'headers' => $req->headers->all(),
-            'content' => $req->getContent(),         // ce que PHP reçoit réellement
-            'params'  => $req->request->all(),       // form-data x-www-form-urlencoded
-            'query'   => $req->query->all(),         // ?a=1&b=2
+            'content' => $req->getContent(),
+            'params'  => $req->request->all(),
+            'query'   => $req->query->all(),
             'ctype'   => $req->headers->get('content-type'),
         ]);
     }
 
     /**
-     * GET /api/rides?from=Paris&to=Lille&date=2025-11-10
+     * GET /api/rides?from=Paris&to=Lille&date=2025-11-10&eco=1&priceMax=25&durationMax=150
      */
     #[Route('/rides', name: 'rides_list', methods: ['GET'])]
     public function list(Request $req, RideRepository $repo): JsonResponse
     {
-        $from = $req->query->get('from');
-        $to   = $req->query->get('to');
-        $date = $req->query->get('date');
+        $from        = $req->query->get('from');
+        $to          = $req->query->get('to');
+        $date        = $req->query->get('date');
+        $eco         = $req->query->get('eco');
+        $priceMax    = $req->query->get('priceMax');
+        $durationMax = $req->query->get('durationMax'); // en minutes
 
         $qb = $repo->createQueryBuilder('r')
             ->addSelect('v', 'b', 'd')
@@ -71,8 +74,29 @@ class RideController extends AbstractController
                 return $this->json(['error' => 'Invalid date format, expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
             }
         }
+        if ($eco !== null && $eco !== '') {
+            $qb->andWhere('v.eco = :eco')->setParameter('eco', (bool)((int)$eco));
+        }
+        if ($priceMax !== null && $priceMax !== '') {
+            $qb->andWhere('r.price <= :pmax')->setParameter('pmax', (float)$priceMax);
+        }
 
+        /** @var Ride[] $rides */
         $rides = $qb->getQuery()->getResult();
+
+        // durationMax traité en PHP pour éviter la fonction SQL non supportée par DQL
+        if ($durationMax !== null && $durationMax !== '') {
+            $max = (int) $durationMax;
+            $rides = array_values(array_filter($rides, static function (Ride $r) use ($max) {
+                $start = $r->getStartAt();
+                $end   = $r->getEndAt();
+                if (!$start || !$end) {
+                    return false;
+                }
+                $minutes = (int) round(($end->getTimestamp() - $start->getTimestamp()) / 60);
+                return $minutes <= $max;
+            }));
+        }
 
         $data = array_map(static function (Ride $r): array {
             return [
@@ -100,10 +124,6 @@ class RideController extends AbstractController
         return $this->json($data);
     }
 
-    /**
-     * POST /api/rides/{id}/book
-     * Body JSON: { "userId": 1, "seats": 1 }
-     */
     #[Route('/rides/{id}/book', name: 'ride_book', methods: ['POST'])]
     public function book(
         int $id,
@@ -111,18 +131,15 @@ class RideController extends AbstractController
         RideRepository $rides,
         EntityManagerInterface $em
     ): JsonResponse {
-        /** @var Ride|null $ride */
         $ride = $rides->find($id);
         if (!$ride) {
             return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
         }
 
-        // Parseur ultra-tolérant : JSON -> form-data -> query
         $userId = 0;
         $seats  = 0;
 
         $raw = $req->getContent() ?? '';
-
         if ($raw !== '') {
             try {
                 $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
@@ -130,29 +147,12 @@ class RideController extends AbstractController
                     $userId = (int)($decoded['userId'] ?? 0);
                     $seats  = (int)($decoded['seats'] ?? 0);
                 }
-            } catch (\JsonException) {
-                // on ignore, on essaiera d'autres sources
-            }
+            } catch (\JsonException) {}
         }
 
         if ($userId <= 0 || $seats <= 0) {
-            // x-www-form-urlencoded
-            $formUserId = $req->request->get('userId');
-            $formSeats  = $req->request->get('seats');
-            if ($formUserId !== null || $formSeats !== null) {
-                $userId = (int)$formUserId;
-                $seats  = (int)$formSeats;
-            }
-        }
-
-        if ($userId <= 0 || $seats <= 0) {
-            // fallback query string: /book?userId=1&seats=1
-            $qsUserId = $req->query->get('userId');
-            $qsSeats  = $req->query->get('seats');
-            if ($qsUserId !== null || $qsSeats !== null) {
-                $userId = (int)$qsUserId;
-                $seats  = (int)$qsSeats;
-            }
+            $userId = (int) ($req->request->get('userId') ?? $req->query->get('userId', 0));
+            $seats  = (int) ($req->request->get('seats')  ?? $req->query->get('seats', 0));
         }
 
         if ($userId <= 0 || $seats <= 0) {
@@ -164,7 +164,6 @@ class RideController extends AbstractController
         try {
             $em->beginTransaction();
 
-            /** @var Ride|null $ride */
             $ride = $em->getRepository(Ride::class)->find($id);
             if (!$ride) {
                 $em->rollback();

@@ -72,7 +72,20 @@
         </div>
     </footer>
 
+    <script type="module" src="js/auth/session.js"></script>
     <script type="module" src="Router/router.js"></script>
     <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        import("/js/auth/session.js").then(mod => {
+            window.signout = function() {
+                mod.clearSession();
+      // revenir accueil
+      window.history.pushState({}, "", "/");
+      window.route({ target: { href: "/" }, preventDefault(){} });
+    };
+});
+    </script>
+
+    
 </body>
 </html>

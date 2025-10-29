@@ -10,6 +10,12 @@ const $err  = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
 
+// Filtres (IDs existants dans ta page)
+const $eco   = document.getElementById("ecoFilter");
+const $pmax  = document.getElementById("priceFilter");
+const $dmax  = document.getElementById("durationFilter");
+const $rmin  = document.getElementById("ratingFilter");
+
 // Pré-remplissage via querystring
 (function prefillFromQuery() {
   const q = new URLSearchParams(window.location.search);
@@ -46,10 +52,14 @@ async function render() {
 
   try {
     const items = await fetchRides({
-      from: $from.value.trim(),
-      to:   $to.value.trim(),
-      date: $date.value,
-    });
+        from: $from.value.trim(),
+        to:   $to.value.trim(),
+        date: $date.value,
+        eco:  $eco.checked,
+        priceMax: $pmax.value ? Number($pmax.value) : "",
+        durationMax: $dmax.value ? Number($dmax.value) : "",
+      });
+
 
     if (!items.length) {
       $feedback.textContent = "Aucun résultat.";
@@ -69,14 +79,13 @@ async function render() {
 function bindBookButtons() {
   document.querySelectorAll(".js-book").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      // contrôle "auth"
       const session = getSession();
       if (!session || !session.user) {
         alert("Connecte-toi d'abord pour réserver.");
         if (typeof window.navigate === "function") {
-          window.navigate("/signin");  
+          window.navigate("/signin");
         } else {
-          window.location.href = "/signin"; // fallback
+          window.location.href = "/signin";
         }
         return;
       }
@@ -106,7 +115,13 @@ if ($form) {
     render();
   });
 
-  // Si on arrive avec ?from&to&date → lancer direct
+  // Recharger quand un filtre change
+  const filterForm = document.getElementById("filterForm");
+  if (filterForm) {
+    filterForm.addEventListener("change", () => render());
+  }
+
+  // Lancer direct si on arrive avec des query params
   if ($from.value || $to.value || $date.value) {
     render();
   }
