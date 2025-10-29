@@ -7,3 +7,5 @@ backend/.env.local
 
 .vscode/
 .idea/
+
+payload.json
