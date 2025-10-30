@@ -16,24 +16,20 @@ security:
     main:
       provider: app_user_provider
       lazy: true
-      # session-based auth (cookie)
-      json_login:
-        check_path: /api/auth/login
-        username_path: email
-        password_path: password
+      stateless: false        # session-based
       logout:
         path: /api/auth/logout
         invalidate_session: true
-      # garde la session (cookie)
-      stateless: false
 
   access_control:
+    # publics
     - { path: ^/api/health$, roles: PUBLIC_ACCESS, methods: [GET] }
     - { path: ^/api/rides$, roles: PUBLIC_ACCESS, methods: [GET] }
-    - { path: ^/api/rides/\d+/book$, roles: ROLE_USER, methods: [POST] }
-    - { path: ^/api/me$, roles: ROLE_USER, methods: [GET] }
-    - { path: ^/api/auth/login$, roles: PUBLIC_ACCESS, methods: [POST] }
-    - { path: ^/api/auth/logout$, roles: PUBLIC_ACCESS, methods: [POST,GET] }
+    - { path: ^/api/auth/(login|logout|me)$, roles: PUBLIC_ACCESS }
+    - { path: ^/api/me/bookings$, roles: PUBLIC_ACCESS, methods: [GET] }
+
+    # protégés (gérés côté contrôleur par session)
+    - { path: ^/api/rides/\d+/book$, roles: PUBLIC_ACCESS, methods: [POST,DELETE] }
 
 when@test:
   security:

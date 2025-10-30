@@ -1,4 +1,5 @@
 import { setSession } from "../auth/session.js";
+import { login } from "../api.js";
 
 const form = document.getElementById("signinForm");
 const email = document.getElementById("email");
@@ -6,7 +7,7 @@ const password = document.getElementById("password");
 const err = document.getElementById("signin-error");
 
 if (form) {
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     err.classList.add("d-none");
     err.textContent = "";
@@ -17,12 +18,15 @@ if (form) {
       return;
     }
 
-    // MOCK login → on stocke une session locale (id=1 = fixtures)
-    const session = {
-      user: { id: 1, email: email.value.trim(), pseudo: "ecoDriver" },
-      token: "mock-token",
-    };
-    setSession(session);
+    try {
+      const res = await login({ email: email.value.trim(), password: password.value.trim() });
+      // Le backend crée la session (cookie); on garde aussi une copie locale utile au front
+      setSession({ user: res.user, token: "session" });
+    } catch (e) {
+      err.textContent = "Identifiants invalides ou serveur injoignable.";
+      err.classList.remove("d-none");
+      return;
+    }
 
     // redirection SPA et rechargement du contenu
     if (typeof window.navigate === "function") {
@@ -34,3 +38,4 @@ if (form) {
     }
   });
 }
+

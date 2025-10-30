@@ -1,0 +1,80 @@
+<div class="container py-4">
+  <h2 class="mb-3">Créer un trajet</h2>
+
+  <div id="cr-error" class="alert alert-danger d-none" role="alert"></div>
+  <div id="cr-success" class="alert alert-success d-none" role="alert"></div>
+
+  <form id="createRideForm" class="row g-3" onsubmit="return false;">
+    <div class="col-md-6">
+      <label class="form-label">Ville de départ</label>
+      <input id="cr-fromCity" class="form-control" placeholder="Paris" required />
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label">Ville d'arrivée</label>
+      <input id="cr-toCity" class="form-control" placeholder="Lille" required />
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Date & heure départ</label>
+      <input id="cr-startAt" class="form-control" type="datetime-local" required />
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Date & heure arrivée</label>
+      <input id="cr-endAt" class="form-control" type="datetime-local" required />
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Prix (€)</label>
+      <input id="cr-price" class="form-control" type="number" step="0.1" min="0" placeholder="19.5" required />
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Musique (optionnel)</label>
+      <input id="cr-music" class="form-control" placeholder="pop" />
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Marque</label>
+      <input id="cr-brand" class="form-control" placeholder="Renault" required />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Modèle</label>
+      <input id="cr-model" class="form-control" placeholder="Zoe" required />
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Places total</label>
+      <input id="cr-seats" class="form-control" type="number" min="1" max="8" value="4" required />
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Couleur</label>
+      <input id="cr-color" class="form-control" placeholder="white" />
+    </div>
+
+    <div class="col-md-3 form-check ms-2">
+      <input id="cr-eco" class="form-check-input" type="checkbox" />
+      <label class="form-check-label" for="cr-eco">Éco</label>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Énergie</label>
+      <select id="cr-energy" class="form-select">
+        <option value="electric">electric</option>
+        <option value="hybrid">hybrid</option>
+        <option value="diesel">diesel</option>
+        <option value="petrol">petrol</option>
+      </select>
+    </div>
+    <div class="col-md-3 form-check">
+      <input id="cr-allowSmoker" class="form-check-input" type="checkbox" />
+      <label class="form-check-label" for="cr-allowSmoker">Fumeur autorisé</label>
+    </div>
+    <div class="col-md-3 form-check">
+      <input id="cr-allowAnimals" class="form-check-input" type="checkbox" />
+      <label class="form-check-label" for="cr-allowAnimals">Animaux autorisés</label>
+    </div>
+
+    <div class="col-12">
+      <button id="cr-submit" class="btn btn-primary">Créer</button>
+      <a href="/covoiturages" data-link class="btn btn-outline-secondary ms-2">Retour à la recherche</a>
+    </div>
+  </form>
+</div>

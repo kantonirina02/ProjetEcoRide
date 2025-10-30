@@ -1,7 +1,5 @@
-import { fetchRides, bookRide } from "../api.js";
-
+import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
 const getSession = () => (window.__session ?? null);
-
 const $form = document.getElementById("rideSearchForm");
 const $from = document.getElementById("departure");
 const $to   = document.getElementById("arrival");
@@ -9,14 +7,36 @@ const $date = document.getElementById("date");
 const $err  = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
-
-// Filtres (IDs existants dans ta page)
 const $eco   = document.getElementById("ecoFilter");
 const $pmax  = document.getElementById("priceFilter");
 const $dmax  = document.getElementById("durationFilter");
+// rating non supporté côté API (on l’ignore proprement)
 const $rmin  = document.getElementById("ratingFilter");
 
-// Pré-remplissage via querystring
+// --- Utilitaires
+const navigate = (href) => {
+  if (typeof window.navigate === "function") {
+    window.navigate(href);
+  } else {
+    window.location.href = href;
+  }
+};
+
+async function fetchMyBookedRideIds() {
+  try {
+    const data = await fetchMyBookings(); // { auth:boolean, bookings:[...] }
+    const ids = new Set(
+      Array.isArray(data?.bookings)
+        ? data.bookings.map(x => (typeof x === "number" ? x : x.rideId)).filter(Boolean)
+        : []
+    );
+    return ids;
+  } catch {
+    return new Set();
+  }
+}
+
+// --- Pré-remplissage via querystring
 (function prefillFromQuery() {
   const q = new URLSearchParams(window.location.search);
   if (q.has("from")) $from.value = q.get("from");
@@ -24,8 +44,26 @@ const $rmin  = document.getElementById("ratingFilter");
   if (q.has("date")) $date.value = q.get("date");
 })();
 
-function card(r) {
+function card(r, state) {
   const price = typeof r.price === "number" ? r.price.toFixed(2) : r.price;
+
+  // Règles d’état bouton
+  const session = getSession();
+  const isDriver = !!(session?.user?.id) && r?.driver?.id === session.user.id;
+  const soldOut  = (r.seatsLeft ?? 0) <= 0;
+  const alreadyBooked = state.bookedIds.has(r.id);
+
+  let btnHtml = "";
+  if (isDriver) {
+    btnHtml = `<button class="btn btn-secondary btn-sm mt-2" disabled>Vous êtes le conducteur</button>`;
+  } else if (alreadyBooked) {
+    btnHtml = `<button class="btn btn-success btn-sm mt-2" disabled>Réservé ✓</button>`;
+  } else if (soldOut) {
+    btnHtml = `<button class="btn btn-outline-secondary btn-sm mt-2" disabled>Complet</button>`;
+  } else {
+    btnHtml = `<button class="btn btn-outline-primary btn-sm mt-2 js-book" data-id="${r.id}">Réserver</button>`;
+  }
+
   return `
     <div class="card mb-3 shadow-sm">
       <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -38,7 +76,7 @@ function card(r) {
         </div>
         <div class="text-end">
           <div class="fs-5 fw-bold">${price} €</div>
-          <button class="btn btn-outline-primary btn-sm mt-2 js-book" data-id="${r.id}">Réserver</button>
+          ${btnHtml}
         </div>
       </div>
     </div>
@@ -51,23 +89,29 @@ async function render() {
   $list.innerHTML = "";
 
   try {
+    // 1) Récupère la liste de trajets
+    // NB: si api.js n’accepte que from/to/date, les filtres éco/prix/durée seront ignorés sans erreur.
     const items = await fetchRides({
-        from: $from.value.trim(),
-        to:   $to.value.trim(),
-        date: $date.value,
-        eco:  $eco.checked,
-        priceMax: $pmax.value ? Number($pmax.value) : "",
-        durationMax: $dmax.value ? Number($dmax.value) : "",
-      });
+      from: $from?.value?.trim() || "",
+      to:   $to?.value?.trim()   || "",
+      date: $date?.value || "",
+      // eco/priceMax/durationMax ne feront effet que lorsque api.js les transmettra au backend
+      eco: ($eco && $eco.checked) ? 1 : undefined,
+      priceMax: $pmax?.value ? Number($pmax.value) : undefined,
+      durationMax: $dmax?.value ? Number($dmax.value) : undefined,
+    });
 
+    // 2) Récupère les réservations de l’utilisateur (si connecté)
+    const bookedIds = await fetchMyBookedRideIds();
 
-    if (!items.length) {
+    if (!Array.isArray(items) || items.length === 0) {
       $feedback.textContent = "Aucun résultat.";
       return;
     }
 
     $feedback.textContent = "";
-    $list.innerHTML = items.map(card).join("");
+    const state = { bookedIds };
+    $list.innerHTML = items.map(r => card(r, state)).join("");
     bindBookButtons();
   } catch (e) {
     console.error(e);
@@ -82,11 +126,7 @@ function bindBookButtons() {
       const session = getSession();
       if (!session || !session.user) {
         alert("Connecte-toi d'abord pour réserver.");
-        if (typeof window.navigate === "function") {
-          window.navigate("/signin");
-        } else {
-          window.location.href = "/signin";
-        }
+        navigate("/signin");
         return;
       }
 
@@ -94,17 +134,25 @@ function bindBookButtons() {
       btn.disabled = true;
       const old = btn.textContent;
       btn.textContent = "…";
+
       try {
-        const res = await bookRide(id, { userId: session.user.id, seats: 1 });
-        alert(`Réservation OK ! Places restantes : ${res.seatsLeft}`);
-        await render();
-      } catch (e) {
-        console.error(e);
-        alert("Échec de la réservation");
-      } finally {
-        btn.disabled = false;
-        btn.textContent = old;
-      }
+  await bookRide(id, { seats: 1 });
+  // soit on recharge la liste:
+  // await render();
+
+  // soit on redirige vers /bookings :
+  if (typeof window.navigate === "function") {
+    window.navigate("/bookings");
+  } else {
+    window.location.href = "/bookings";
+  }
+} catch (e) {
+  console.error(e);
+  alert("Échec de la réservation");
+} finally {
+  btn.disabled = false;
+  btn.textContent = old;
+}
     });
   });
 }
@@ -115,14 +163,14 @@ if ($form) {
     render();
   });
 
-  // Recharger quand un filtre change
+  // Recharger quand un filtre change (si présents)
   const filterForm = document.getElementById("filterForm");
   if (filterForm) {
     filterForm.addEventListener("change", () => render());
   }
 
   // Lancer direct si on arrive avec des query params
-  if ($from.value || $to.value || $date.value) {
+  if (($from && $from.value) || ($to && $to.value) || ($date && $date.value)) {
     render();
   }
 }

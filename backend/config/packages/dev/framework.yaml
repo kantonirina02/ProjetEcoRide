@@ -1,0 +1,4 @@
+framework:
+  session:
+    cookie_samesite: lax
+    cookie_secure: false

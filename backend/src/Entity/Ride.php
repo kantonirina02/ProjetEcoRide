@@ -29,20 +29,8 @@ class Ride
     #[ORM\Column(length: 120)]
     private ?string $fromCity = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7)]
-    private ?string $fromLat = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7)]
-    private ?string $fromLng = null;
-
     #[ORM\Column(length: 120)]
     private ?string $toCity = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7)]
-    private ?string $toLat = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7)]
-    private ?string $toLng = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private ?\DateTimeImmutable $startAt = null;
@@ -111,20 +99,8 @@ class Ride
     public function getFromCity(): ?string { return $this->fromCity; }
     public function setFromCity(string $fromCity): self { $this->fromCity = $fromCity; return $this; }
 
-    public function getFromLat(): ?string { return $this->fromLat; }
-    public function setFromLat(string $fromLat): self { $this->fromLat = $fromLat; return $this; }
-
-    public function getFromLng(): ?string { return $this->fromLng; }
-    public function setFromLng(string $fromLng): self { $this->fromLng = $fromLng; return $this; }
-
     public function getToCity(): ?string { return $this->toCity; }
     public function setToCity(string $toCity): self { $this->toCity = $toCity; return $this; }
-
-    public function getToLat(): ?string { return $this->toLat; }
-    public function setToLat(string $toLat): self { $this->toLat = $toLat; return $this; }
-
-    public function getToLng(): ?string { return $this->toLng; }
-    public function setToLng(string $toLng): self { $this->toLng = $toLng; return $this; }
 
     public function getStartAt(): ?\DateTimeImmutable { return $this->startAt; }
     public function setStartAt(\DateTimeImmutable $startAt): self { $this->startAt = $startAt; return $this; }

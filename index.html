@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -20,6 +20,9 @@
                             <a href="/" class="nav-link" data-link>Accueil</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="/bookings" data-link>Mes reservations</a>
+                        </li>
+                        <li class="nav-item">
                             <a href="/covoiturages" class="nav-link" data-link>Covoiturages</a>
                         </li>
                         <li class="nav-item">
@@ -38,7 +41,10 @@
                             <a href="/account" class="nav-link" data-link>Mon Profil</a>
                         </li>
                         <li class="nav-item" data-show-connected>
-                            <a href="#" onclick="signout()" class="nav-link">Déconnexion</a>
+                            <a href="/new-rides" class="nav-link" data-link>Créer un trajet</a>
+                        </li>
+                        <li class="nav-item" data-show-connected>
+                            <a href="/" onclick="return signout(event)" class="nav-link">Déconnexion</a>
                         </li>
                     </ul>
                 </div>
@@ -46,7 +52,7 @@
         </div>
     </header>
     <main id="main-page">
-        <!-- Le contenu de la page sera injectée ici-->
+        <!-- Le contenu de la page sera injecté ici-->
     </main>
 
     <footer id="contact-footer" class="bg-dark text-white py-4 mt-5 footer">
@@ -54,7 +60,7 @@
             <div class="row gy-3">
                 <div class="col-md-6 text-center text-md-start">
                     <p class="mb-1 fw-bold">EcoRide</p>
-                    <p class="mb-0">&copy; 2025 - Plateforme de covoiturage écologique</p>
+                    <p class="mb-0">&copy; 2025 - Plateforme de covoiturage Ã©cologique</p>
                 </div>
                 <div class="col-md-6 text-center text-md-end">
                     <p class="mb-1">
@@ -65,7 +71,7 @@
                     <p class="mb-0">
                         155 rue de Charonne, 75011 Paris
                         &middot;
-                        <a href="/mentions-legales" class="text-white text-decoration-underline" data-link>Mentions légales</a>
+                        <a href="/mentions-legales" class="text-white text-decoration-underline" data-link>Mentions lÃ©gales</a>
                     </p>
                 </div>
             </div>
@@ -73,27 +79,21 @@
     </footer>
 
     <script type="module" src="js/auth/session.js"></script>
-    <script>
-        try { window.__session = JSON.parse(localStorage.getItem("__session") || "null"); }
-        catch (e) { window.__session = null; }
-        window.signout = () => {
-            localStorage.removeItem("__session");
-            window.__session = null;
-            if (typeof window.navigate === "function") window.navigate("/");
-            else window.location.href = "/";
-        };
-    </script>
     <script type="module" src="Router/router.js"></script>
     <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        import("/js/auth/session.js").then(mod => {
-            window.signout = function() {
-                mod.clearSession();
-      // revenir accueil
-      window.history.pushState({}, "", "/");
-      window.route({ target: { href: "/" }, preventDefault(){} });
-    };
-});
+    <script type="module">
+      import("/js/auth/session.js").then((mod) => {
+        window.signout = async function (e) {
+          try { if (e && typeof e.preventDefault === 'function') e.preventDefault(); } catch {}
+          try {
+            await fetch("http://localhost:8001/api/auth/logout", { method: "POST", credentials: "include" });
+          } catch {}
+          mod.clearSession();
+          if (typeof window.navigate === "function") window.navigate("/");
+          else window.location.href = "/";
+          return false;
+        };
+      });
     </script>
 
     
