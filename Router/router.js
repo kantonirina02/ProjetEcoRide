@@ -1,70 +1,80 @@
 import Route from "./Route.js";
 import { allRoutes, websiteName } from "./allRoutes.js";
+import { getSession } from "../js/auth/session.js";
 
-// Route 404
+// 404
 const route404 = new Route("404", "Page introuvable", "/pages/404.html");
 
-// Trouver la route correspondant à une URL
+// trouve la route
 const getRouteByUrl = (url) => {
-  let currentRoute = null;
-  allRoutes.forEach((r) => {
-    if (r.url === url) currentRoute = r;
-  });
-  return currentRoute ?? route404;
+  let r = null;
+  allRoutes.forEach((it) => { if (it.url === url) r = it; });
+  return r ?? route404;
 };
 
-// Charge le HTML et le JS de la page courante
-const LoadContentPage = async () => {
+// met à jour la visibilité des liens selon la session
+function applyAuthVisibility() {
+  const sess = getSession();
+  document.querySelectorAll("[data-show-connected]").forEach(el => {
+    el.style.display = sess && sess.user ? "" : "none";
+  });
+  document.querySelectorAll("[data-show-disconnected]").forEach(el => {
+    el.style.display = sess && sess.user ? "none" : "";
+  });
+}
+
+// charge la page
+async function LoadContentPage() {
   const path = window.location.pathname;
-  const actualRoute = getRouteByUrl(path);
+  const route = getRouteByUrl(path);
 
-  // Injecte le HTML
-  const html = await fetch(actualRoute.pathHtml).then((r) => r.text());
-  document.getElementById("main-page").innerHTML = html;
+  const html = await fetch(route.pathHtml).then(r => r.text());
+  const host = document.getElementById("main-page");
+  if (host) host.innerHTML = html;
 
-  if (actualRoute.pathJS) {
-    document
-      .querySelectorAll(`script[data-page-js]`)
-      .forEach((s) => s.remove());
+  document.title = `${route.title} - ${websiteName}`;
+  applyAuthVisibility();
 
+  // charge le script de page en module si fourni
+  if (route.pathJS) {
     const s = document.createElement("script");
     s.type = "module";
-    s.src = actualRoute.pathJS;
-    s.dataset.pageJs = actualRoute.pathJS;
+    s.src = route.pathJS;
+    s.defer = true;
+    s.onerror = (e) => console.error("Page script load failed:", route.pathJS, e);
     document.body.appendChild(s);
   }
+}
 
-  // Titre
-  document.title = `${actualRoute.title} - ${websiteName}`;
-};
-
-// Navigation SPA réutilisable
-function navigate(href) {
-  window.history.pushState({}, "", href);
+// navigation SPA
+function navigate(url) {
+  if (window.location.pathname === url) {
+    // si on est déjà sur l’URL, on recharge le contenu (utile après login)
+    LoadContentPage();
+    return;
+  }
+  window.history.pushState({}, "", url);
   LoadContentPage();
 }
 
-// Gestion des liens <a data-link>
-const delegateLinks = () => {
-  document.addEventListener("click", (e) => {
-    const a = e.target.closest('a[data-link]');
-    if (!a) return;
-    e.preventDefault();
-    navigate(a.getAttribute("href"));
-  });
-};
+// intercepte tous les clics sur <a data-link>
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-link]");
+  if (!a) return;
+  const url = a.getAttribute("href");
+  if (!url || url.startsWith("http")) return; // liens externes = laisser passer
+  e.preventDefault();
+  navigate(url);
+});
 
-// API globale
-const routeEvent = (event) => {
-  event = event || window.event;
-  event.preventDefault();
-  navigate(event.target.href);
-};
-
+// gère back/forward
 window.onpopstate = LoadContentPage;
-window.route = routeEvent;   
-window.navigate = navigate;  
 
-// Bootstrap du router
-delegateLinks();
+// expose pour les autres scripts
+window.navigate = navigate;
+
+// refresh header quand la session change
+window.addEventListener("session:changed", applyAuthVisibility);
+
+// 1er rendu
 LoadContentPage();

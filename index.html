@@ -73,6 +73,16 @@
     </footer>
 
     <script type="module" src="js/auth/session.js"></script>
+    <script>
+        try { window.__session = JSON.parse(localStorage.getItem("__session") || "null"); }
+        catch (e) { window.__session = null; }
+        window.signout = () => {
+            localStorage.removeItem("__session");
+            window.__session = null;
+            if (typeof window.navigate === "function") window.navigate("/");
+            else window.location.href = "/";
+        };
+    </script>
     <script type="module" src="Router/router.js"></script>
     <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>

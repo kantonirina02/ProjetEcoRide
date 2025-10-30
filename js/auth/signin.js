@@ -17,20 +17,20 @@ if (form) {
       return;
     }
 
-    // MOCK: on crée une session locale (id 1 = fixtures)
+    // MOCK login → on stocke une session locale (id=1 = fixtures)
     const session = {
-      user: {
-        id: 1,
-        email: email.value.trim(),
-        pseudo: "ecoDriver",
-      },
+      user: { id: 1, email: email.value.trim(), pseudo: "ecoDriver" },
       token: "mock-token",
     };
-
     setSession(session);
 
-    // retour à l’accueil
-    window.history.pushState({}, "", "/");
-    window.route({ target: { href: "/" }, preventDefault(){} });
+    // redirection SPA et rechargement du contenu
+    if (typeof window.navigate === "function") {
+      window.navigate("/");
+    } else {
+      // (sécurité si router n'est pas chargé, peu probable)
+      window.history.pushState({}, "", "/");
+      window.location.reload();
+    }
   });
 }

@@ -1,37 +1,21 @@
-const KEY = "ecoride.session";
+const KEY = "ecoride_session";
 
 export function getSession() {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) || "null");
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(localStorage.getItem(KEY)) || null; }
+  catch { return null; }
 }
 
 export function setSession(sess) {
   localStorage.setItem(KEY, JSON.stringify(sess));
-  applyHeaderVisibility();
+  window.__session = sess;
+  window.dispatchEvent(new CustomEvent("session:changed", { detail: { session: sess } }));
 }
 
 export function clearSession() {
   localStorage.removeItem(KEY);
-  applyHeaderVisibility();
+  window.__session = null;
+  window.dispatchEvent(new CustomEvent("session:changed", { detail: { session: null } }));
 }
 
-export function isConnected() {
-  const s = getSession();
-  return !!(s && s.user && s.user.id);
-}
-
-// Utilitaire pour le header : show/hide selon l’état
-export function applyHeaderVisibility() {
-  const connectedEls = document.querySelectorAll("[data-show-connected]");
-  const disconnectedEls = document.querySelectorAll("[data-show-disconnected]");
-  const connected = isConnected();
-
-  connectedEls.forEach(el => el.classList.toggle("d-none", !connected));
-  disconnectedEls.forEach(el => el.classList.toggle("d-none", connected));
-}
-
-// Appel initial (au chargement module)
-applyHeaderVisibility();
+// hydrate en mémoire au chargement
+window.__session = getSession();
