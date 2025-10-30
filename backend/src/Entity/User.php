@@ -6,11 +6,13 @@ use App\Repository\UserRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
 #[ORM\UniqueConstraint(name: 'uniq_user_email', columns: ['email'])]
-class User
+class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -20,6 +22,9 @@ class User
     #[ORM\Column(length: 255)]
     private ?string $email = null;
 
+    /**
+     * @var string The hashed password
+     */
     #[ORM\Column(length: 255)]
     private ?string $password = null;
 
@@ -30,10 +35,14 @@ class User
     private ?string $phone = null;
 
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
-    private ?int $creditsBalance = 0;
+    private int $creditsBalance = 0;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private ?\DateTimeImmutable $createdAt = null;
+
+    /** Rôles de sécurité (ex: ["ROLE_USER","ROLE_ADMIN"]) */
+    #[ORM\Column(type: 'json')]
+    private array $roles = [];
 
     /** @var Collection<int, Vehicle> */
     #[ORM\OneToMany(mappedBy: 'owner', targetEntity: Vehicle::class)]
@@ -63,6 +72,7 @@ class User
         $this->rideParticipants = new ArrayCollection();
         $this->reviews = new ArrayCollection();
         $this->creditLedgers = new ArrayCollection();
+        $this->roles = ['ROLE_USER'];
     }
 
     public function getId(): ?int { return $this->id; }
@@ -70,8 +80,14 @@ class User
     public function getEmail(): ?string { return $this->email; }
     public function setEmail(string $email): self { $this->email = $email; return $this; }
 
+    /** Symfony 6/7 — identifiant unique de connexion */
+    public function getUserIdentifier(): string { return (string) $this->email; }
+
+    /** Compat v<6 (non utilisé, mais exigé par l’interface UserInterface dans certains contextes) */
+    public function getUsername(): string { return $this->getUserIdentifier(); }
+
     public function getPassword(): ?string { return $this->password; }
-    public function setPassword(string $password): self { $this->password = $password; return $this; }
+    public function setPassword(string $hashed): self { $this->password = $hashed; return $this; }
 
     public function getPseudo(): ?string { return $this->pseudo; }
     public function setPseudo(string $pseudo): self { $this->pseudo = $pseudo; return $this; }
@@ -79,11 +95,24 @@ class User
     public function getPhone(): ?string { return $this->phone; }
     public function setPhone(?string $phone): self { $this->phone = $phone; return $this; }
 
-    public function getCreditsBalance(): ?int { return $this->creditsBalance; }
+    public function getCreditsBalance(): int { return $this->creditsBalance; }
     public function setCreditsBalance(int $creditsBalance): self { $this->creditsBalance = $creditsBalance; return $this; }
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
     public function setCreatedAt(\DateTimeImmutable $createdAt): self { $this->createdAt = $createdAt; return $this; }
+
+    /** @return array<string> */
+    public function getRoles(): array
+    {
+        $roles = $this->roles ?? [];
+        if (!in_array('ROLE_USER', $roles, true)) {
+            $roles[] = 'ROLE_USER';
+        }
+        return array_values(array_unique($roles));
+    }
+    public function setRoles(array $roles): self { $this->roles = $roles; return $this; }
+
+    public function eraseCredentials(): void {}
 
     /** @return Collection<int, Vehicle> */
     public function getVehicles(): Collection { return $this->vehicles; }
