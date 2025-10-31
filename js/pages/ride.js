@@ -10,10 +10,12 @@ function qparam(name) {
   const q = new URLSearchParams(window.location.search);
   return q.get(name);
 }
-function cls($el, add, ...cls) { $el.classList[add ? "add" : "remove"](...cls); }
-function showErr(msg) { $err.textContent = msg || "Erreur"; cls($err, false, "d-none"); $fb.textContent = ""; }
-
-function badge(text, variant="secondary") {
+function cls($el, hide, ...c) { if ($el) $el.classList[hide ? "add" : "remove"](...c); }
+function showErr(msg) {
+  if ($err) { $err.textContent = msg || "Erreur"; $err.classList.remove("d-none"); }
+  if ($fb) $fb.textContent = "";
+}
+function badge(text, variant = "secondary") {
   return `<span class="badge text-bg-${variant}">${text}</span>`;
 }
 
@@ -24,10 +26,10 @@ function rideView(r, state) {
   const rules = [
     r.allowSmoker ? "Fumeur: oui" : "Fumeur: non",
     r.allowAnimals ? "Animaux: oui" : "Animaux: non",
-    r.music ? `Musique: ${r.music}` : null
+    r.music ? `Musique: ${r.music}` : null,
   ].filter(Boolean).join(" · ");
 
-  // États bouton selon l’énoncé
+  // CTA selon l’état
   let bookHtml = "";
   if (!state.auth) {
     bookHtml = `<button class="btn btn-outline-primary btn-sm" disabled title="Connectez-vous pour réserver">Réserver</button>`;
@@ -65,7 +67,9 @@ function rideView(r, state) {
 }
 
 function partsView(arr) {
-  if (!arr || !arr.length) return `<div class="text-muted">Aucun participant pour le moment.</div>`;
+  if (!arr || !arr.length) {
+    return `<div class="text-muted">Aucun participant pour le moment.</div>`;
+  }
   return arr.map(p => `
     <div class="border rounded p-2 mb-2">
       <div><strong>${p.user?.pseudo ?? "Utilisateur"}</strong> — ${p.seats} siège(s)</div>
@@ -79,24 +83,22 @@ async function render() {
   if (!id) return showErr("Paramètre ?id manquant (ex: /ride?id=7)");
 
   try {
-    // état d’auth (pour CTA et états boutons)
+    // état d’auth pour CTA
     let authInfo = { auth: false, user: null };
     try { authInfo = await me(); } catch {}
-    cls($auth, authInfo.auth, "d-none"); // si pas auth => afficher CTA
+    if ($auth) cls($auth, authInfo.auth, "d-none"); // si pas auth => afficher CTA
 
     const r = await fetchRide(id);
 
-    // calcul des états
+    // états
     const isDriver = authInfo.auth && r?.driver?.id === authInfo.user?.id;
     const soldOut  = (r.seatsLeft ?? 0) <= 0;
-
-    // alreadyBooked? on le déduit côté détail (participants contient l’utilisateur si réservé)
     const alreadyBooked = authInfo.auth && Array.isArray(r.participants)
       && r.participants.some(p => p?.user?.id === authInfo.user?.id);
 
-    $fb.textContent = "";
-    $card.innerHTML = rideView(r, { auth: authInfo.auth, isDriver, soldOut, alreadyBooked });
-    $parts.innerHTML = partsView(r.participants);
+    if ($fb) $fb.textContent = "";
+    if ($card) $card.innerHTML = rideView(r, { auth: authInfo.auth, isDriver, soldOut, alreadyBooked });
+    if ($parts) $parts.innerHTML = partsView(r.participants);
 
     // actions
     const $b = document.getElementById("ride-book");
@@ -105,7 +107,7 @@ async function render() {
     $b?.addEventListener("click", async () => {
       const old = $b.textContent; $b.disabled = true; $b.textContent = "…";
       try {
-        await bookRide(r.id, { seats: 1 }); // userId jamais envoyé
+        await bookRide(r.id, { seats: 1 });
         location.reload();
       } catch { alert("Échec de la réservation"); }
       finally { $b.disabled = false; $b.textContent = old; }

@@ -5,14 +5,23 @@ import { getSession } from "../js/auth/session.js";
 // 404
 const route404 = new Route("404", "Page introuvable", "/pages/404.html");
 
-// trouve la route
+// -------- trouve la route (supporte /ride/:id) --------
 const getRouteByUrl = (url) => {
-  let r = null;
-  allRoutes.forEach((it) => { if (it.url === url) r = it; });
-  return r ?? route404;
+  // 1) correspondance exacte
+  let r = allRoutes.find(it => it.url === url);
+  if (r) return r;
+
+  // 2) motifs dynamiques
+  //    /ride/:id -> route '/ride'
+  if (/^\/ride(\/\d+)?$/.test(url)) {
+    r = allRoutes.find(it => it.url === "/ride");
+    if (r) return r;
+  }
+
+  return route404;
 };
 
-// met à jour la visibilité des liens selon la session
+// -------- met à jour la visibilité des liens selon la session --------
 function applyAuthVisibility() {
   const sess = getSession();
   document.querySelectorAll("[data-show-connected]").forEach(el => {
@@ -23,7 +32,7 @@ function applyAuthVisibility() {
   });
 }
 
-// charge la page
+// -------- charge la page --------
 async function LoadContentPage() {
   const path = window.location.pathname;
   const route = getRouteByUrl(path);
@@ -46,7 +55,7 @@ async function LoadContentPage() {
   }
 }
 
-// navigation SPA
+// -------- navigation SPA --------
 function navigate(url) {
   if (window.location.pathname === url) {
     // si on est déjà sur l’URL, on recharge le contenu (utile après login)

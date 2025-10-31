@@ -98,5 +98,10 @@ export async function fetchRide(id) {
     headers: { Accept: "application/json" },
     credentials: "include",
   });
-  return json(res);
+  if (!res.ok) {
+    let d = ""; try { d = JSON.stringify(await res.json()); } catch {}
+    throw new Error(`HTTP ${res.status} ${d}`);
+  }
+  return json(res); 
 }
+
