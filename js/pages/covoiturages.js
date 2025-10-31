@@ -1,5 +1,7 @@
 import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
+
 const getSession = () => (window.__session ?? null);
+
 const $form = document.getElementById("rideSearchForm");
 const $from = document.getElementById("departure");
 const $to   = document.getElementById("arrival");
@@ -7,6 +9,7 @@ const $date = document.getElementById("date");
 const $err  = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
+
 const $eco   = document.getElementById("ecoFilter");
 const $pmax  = document.getElementById("priceFilter");
 const $dmax  = document.getElementById("durationFilter");
@@ -55,14 +58,18 @@ function card(r, state) {
 
   let btnHtml = "";
   if (isDriver) {
-    btnHtml = `<button class="btn btn-secondary btn-sm mt-2" disabled>Vous êtes le conducteur</button>`;
+    btnHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous êtes le conducteur</button>`;
   } else if (alreadyBooked) {
-    btnHtml = `<button class="btn btn-success btn-sm mt-2" disabled>Réservé ✓</button>`;
+    btnHtml = `<button class="btn btn-success btn-sm" disabled>Réservé ✓</button>`;
   } else if (soldOut) {
-    btnHtml = `<button class="btn btn-outline-secondary btn-sm mt-2" disabled>Complet</button>`;
+    btnHtml = `<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>`;
   } else {
-    btnHtml = `<button class="btn btn-outline-primary btn-sm mt-2 js-book" data-id="${r.id}">Réserver</button>`;
+    btnHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${r.id}">Réserver</button>`;
   }
+
+  const vehBrand = r?.vehicle?.brand ?? "";
+  const vehModel = r?.vehicle?.model ?? "";
+  const vehEco   = r?.vehicle?.eco ? "🌿" : "";
 
   return `
     <div class="card mb-3 shadow-sm">
@@ -70,14 +77,16 @@ function card(r, state) {
         <div>
           <div class="fw-semibold">${r.from} ➜ ${r.to}</div>
           <div class="small text-muted">
-            ${r.startAt} • ${r.seatsLeft}/${r.seatsTotal} places • 
-            ${r.vehicle.brand} ${r.vehicle.model} ${r.vehicle.eco ? "🌿" : ""}
+            ${r.startAt ?? ""} • ${r.seatsLeft ?? 0}/${r.seatsTotal ?? 0} places • 
+            ${vehBrand} ${vehModel} ${vehEco}
           </div>
         </div>
         <div class="text-end">
           <div class="fs-5 fw-bold">${price} €</div>
-          ${btnHtml}
-          <a class="btn btn-link btn-sm mt-1 p-0" href="/ride?id=${r.id}" data-link>Voir le détail</a>
+          <div class="mt-2 d-flex gap-2 justify-content-end">
+            <a class="btn btn-light btn-sm" href="/ride?id=${r.id}" data-link>Voir le détail</a>
+            ${btnHtml}
+          </div>
         </div>
       </div>
     </div>
@@ -91,7 +100,6 @@ async function render() {
 
   try {
     // 1) Récupère la liste de trajets
-    // NB: si api.js n’accepte que from/to/date, les filtres éco/prix/durée seront ignorés sans erreur.
     const items = await fetchRides({
       from: $from?.value?.trim() || "",
       to:   $to?.value?.trim()   || "",
@@ -137,23 +145,24 @@ function bindBookButtons() {
       btn.textContent = "…";
 
       try {
-  await bookRide(id, { seats: 1 });
-  // soit on recharge la liste:
-  // await render();
+        await bookRide(id, { seats: 1 });
 
-  // soit on redirige vers /bookings :
-  if (typeof window.navigate === "function") {
-    window.navigate("/bookings");
-  } else {
-    window.location.href = "/bookings";
-  }
-} catch (e) {
-  console.error(e);
-  alert("Échec de la réservation");
-} finally {
-  btn.disabled = false;
-  btn.textContent = old;
-}
+        // soit on recharge la liste:
+        // await render();
+
+        // soit on redirige vers /bookings :
+        if (typeof window.navigate === "function") {
+          window.navigate("/bookings");
+        } else {
+          window.location.href = "/bookings";
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Échec de la réservation");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = old;
+      }
     });
   });
 }
