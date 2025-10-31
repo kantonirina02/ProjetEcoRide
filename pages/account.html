@@ -1,7 +1,11 @@
 <section class="container my-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">Mon Profil</h2>
-    <a class="btn btn-primary btn-sm" href="/new-rides" data-link>Créer un trajet</a>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary btn-sm" href="/signin" data-link data-show-disconnected>Se connecter</a>
+      <button id="account-logout" class="btn btn-outline-danger btn-sm" data-show-connected>Se déconnecter</button>
+      <a class="btn btn-primary btn-sm" href="/new-rides" data-link data-show-connected>Créer un trajet</a>
+    </div>
   </div>
 
   <div id="account-welcome" class="mb-4"></div>
