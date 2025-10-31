@@ -1,6 +1,4 @@
-import { me, fetchMyBookings, unbookRide } from "../api.js";
-
-const API = "http://localhost:8001/api";
+import { me, fetchMyBookings, unbookRide, fetchMyRides } from "../api.js";
 
 const $welcome   = document.getElementById("account-welcome");
 const $bFeedback = document.getElementById("account-bookings-feedback");
@@ -15,12 +13,13 @@ function rideCard(r) {
       <div>
         <div class="fw-semibold">${r.from} ➜ ${r.to}</div>
         <div class="small text-muted">
-          ${r.startAt ?? ""} • ${r.seatsLeft}/${r.seatsTotal} places • ${r.vehicle?.brand ?? ""} ${r.vehicle?.model ?? ""} ${r.vehicle?.eco ? "🌿" : ""}
+          ${r.startAt ?? ""} • ${r.seatsLeft}/${r.seatsTotal} places •
+          ${r.vehicle?.brand ?? ""} ${r.vehicle?.model ?? ""} ${r.vehicle?.eco ? "🌿" : ""}
         </div>
       </div>
       <div class="text-end">
         <div class="fw-bold">${typeof r.price === "number" ? r.price.toFixed(2) : r.price} €</div>
-        <div class="small">${r.status}</div>
+        <div class="small">${r.status ?? ""}</div>
       </div>
     </div>
   </div>`;
@@ -49,7 +48,7 @@ function bindUnbook() {
       btn.disabled = true; btn.textContent = "…";
       try {
         await unbookRide(id);
-        await render(); // rafraîchit listes
+        await render();
       } catch (e) {
         console.error(e);
         alert("Échec de l'annulation");
@@ -61,13 +60,11 @@ function bindUnbook() {
 }
 
 async function render() {
-  // entêtes
   $bFeedback.textContent = "Chargement…";
   $rFeedback.textContent = "Chargement…";
   $bList.innerHTML = "";
   $rList.innerHTML = "";
 
-  // auth
   const info = await me().catch(() => ({ auth: false }));
   if (!info?.auth) {
     $welcome.innerHTML = `<div class="alert alert-warning">Veuillez vous connecter pour accéder à votre profil.</div>`;
@@ -80,7 +77,7 @@ async function render() {
 
   // réservations
   try {
-    const data = await fetchMyBookings(); // {auth, bookings}
+    const data = await fetchMyBookings(); // { auth, bookings }
     const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
     if (!bookings.length) {
       $bFeedback.textContent = "Aucune réservation.";
@@ -96,9 +93,7 @@ async function render() {
 
   // trajets conducteur
   try {
-    const res = await fetch(`${API}/me/rides`, { credentials: "include", headers: { Accept: "application/json" }});
-    if (!res.ok) throw new Error("HTTP "+res.status);
-    const rides = await res.json(); // tableau direct
+    const rides = await fetchMyRides(); // tableau direct
     if (!Array.isArray(rides) || !rides.length) {
       $rFeedback.textContent = "Aucun trajet en tant que conducteur.";
     } else {

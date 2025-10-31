@@ -29,18 +29,16 @@ export async function fetchRides({ from = "", to = "", date = "", eco, priceMax,
 }
 
 /* ---------- Réservation / Annulation ---------- */
-// Réserver un trajet (seats par défaut à 1 côté backend)
 export async function bookRide(id, { seats = 1 } = {}) {
   const res = await fetch(`${API_BASE}/rides/${id}/book`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "include",
-    body: JSON.stringify({ seats }), // NE PAS envoyer userId : backend = session
+    body: JSON.stringify({ seats }),
   });
   return json(res);
 }
 
-// Annuler sa réservation (DELETE aussi accepté par le backend)
 export async function unbookRide(rideId) {
   const res = await fetch(`${API_BASE}/rides/${rideId}/book`, {
     method: "DELETE",
@@ -49,12 +47,18 @@ export async function unbookRide(rideId) {
   return json(res);
 }
 
-/* ---------- Mes réservations ---------- */
+/* ---------- Mes réservations / Mes trajets ---------- */
 export async function fetchMyBookings() {
-  const res = await fetch(`${API_BASE}/me/bookings`, {
+  const res = await fetch(`${API_BASE}/me/bookings`, { credentials: "include" });
+  return json(res); // { auth:boolean, bookings:[...] }
+}
+
+export async function fetchMyRides() {
+  const res = await fetch(`${API_BASE}/me/rides`, {
+    headers: { Accept: "application/json" },
     credentials: "include",
   });
-  return json(res); // { auth:boolean, bookings:[...] }
+  return json(res); // tableau de trajets
 }
 
 /* ---------- Auth ---------- */
@@ -82,7 +86,8 @@ export async function logout() {
     credentials: "include",
   });
 }
-/* ---------- Création de trajet (conducteur) ---------- */
+
+/* ---------- Création de trajet ---------- */
 export async function createRide(payload) {
   const res = await fetch(`${API_BASE}/rides`, {
     method: "POST",
@@ -92,6 +97,7 @@ export async function createRide(payload) {
   });
   return json(res);
 }
+
 /* ---------- Détail d'un trajet ---------- */
 export async function fetchRide(id) {
   const res = await fetch(`${API_BASE}/rides/${id}`, {
@@ -102,6 +108,5 @@ export async function fetchRide(id) {
     let d = ""; try { d = JSON.stringify(await res.json()); } catch {}
     throw new Error(`HTTP ${res.status} ${d}`);
   }
-  return json(res); 
+  return json(res);
 }
-
