@@ -36,3 +36,5 @@ pnpm-debug.log*
 *.log
 *.tmp
 *.swp
+backend/login*.json
+backend/payload_*.json
