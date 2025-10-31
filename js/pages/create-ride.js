@@ -4,6 +4,7 @@ import { getSession } from "../auth/session.js";
 const $form = document.getElementById("createRideForm");
 const $err = document.getElementById("cr-error");
 const $ok  = document.getElementById("cr-success");
+const $btn = document.getElementById("cr-submit");
 
 function showErr(msg) {
   $err.textContent = msg || "Erreur";
@@ -16,12 +17,12 @@ function showOk(msg) {
   $err.classList.add("d-none");
 }
 
-function val($el, tr = true) {
-  return tr ? $el.value.trim() : $el.value;
+function val($el, trim = true) {
+  return trim ? $el.value.trim() : $el.value;
 }
 
 async function onSubmit(e) {
-  e.preventDefault();
+  if (e && typeof e.preventDefault === "function") e.preventDefault();
 
   const session = getSession();
   if (!session || !session.user) {
@@ -32,7 +33,7 @@ async function onSubmit(e) {
   }
 
   const payload = {
-    driverId: session.user.id, 
+    driverId: session.user.id,
     vehicle: {
       brand:  val(document.getElementById("cr-brand")),
       model:  val(document.getElementById("cr-model")),
@@ -43,7 +44,7 @@ async function onSubmit(e) {
     },
     fromCity: val(document.getElementById("cr-fromCity")),
     toCity:   val(document.getElementById("cr-toCity")),
-    startAt:  val(document.getElementById("cr-startAt")), // format "YYYY-MM-DDTHH:mm"
+    startAt:  val(document.getElementById("cr-startAt")),
     endAt:    val(document.getElementById("cr-endAt")),
     price:    Number(val(document.getElementById("cr-price"))),
     allowSmoker:  document.getElementById("cr-allowSmoker").checked,
@@ -55,15 +56,13 @@ async function onSubmit(e) {
   payload.startAt = payload.startAt.replace("T", " ");
   payload.endAt   = payload.endAt.replace("T", " ");
 
-  const btn = document.getElementById("cr-submit");
-  const old = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "…";
+  const old = $btn.textContent;
+  $btn.disabled = true;
+  $btn.textContent = "…";
 
   try {
     const res = await createRide(payload);
-    showOk(`Trajet #${res.id} créé ✅`);
-    // Option: rediriger vers la liste avec préfiltre:
+    showOk(`Trajet #${res.id} créé ✔`);
     const q = new URLSearchParams({ from: payload.fromCity, to: payload.toCity, date: payload.startAt.slice(0,10) });
     setTimeout(() => {
       if (typeof window.navigate === "function") window.navigate(`/covoiturages?${q.toString()}`);
@@ -71,11 +70,38 @@ async function onSubmit(e) {
     }, 600);
   } catch (e) {
     console.error(e);
-    showErr("Création impossible. Vérifie les champs (marque, modèle, lat/lng, dates, prix…).");
+    const msg = String(e?.message || "");
+    if (msg.includes("HTTP 400")) {
+      showErr("Création impossible. Vérifie les champs (marque, modèle, villes, dates, prix...).");
+    } else if (msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION")) {
+      showErr("Serveur API indisponible (port 8001). Lance le backend Symfony puis réessaie.");
+    } else {
+      showErr("Création impossible. Réessaie plus tard.");
+    }
   } finally {
-    btn.disabled = false;
-    btn.textContent = old;
+    $btn.disabled = false;
+    $btn.textContent = old;
   }
 }
 
-if ($form) $form.addEventListener("submit", onSubmit);
+// Empêche le refresh et capture le submit
+if ($form) {
+  $form.addEventListener("submit", onSubmit);
+}
+
+// Fallback: capte un clic direct sur le bouton si le submit est bloqué
+if ($btn) {
+  $btn.addEventListener("click", (e) => onSubmit(e));
+}
+
+// Ping API pour indiquer l’état et éviter des essais inutiles
+(async function pingApi() {
+  try {
+    const res = await fetch("http://localhost:8001/api/health", { credentials: "include" });
+    if (!res.ok) throw new Error("bad");
+    $btn?.removeAttribute("disabled");
+  } catch {
+    $btn?.setAttribute("disabled", "disabled");
+    showErr("Serveur API indisponible (port 8001). Lance le backend Symfony puis réessaie.");
+  }
+})();

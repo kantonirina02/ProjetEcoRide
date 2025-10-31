@@ -15,8 +15,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Validator\Constraints as Assert;
-use Symfony\Component\Validator\Validator\ValidatorInterface;
+
+// Validation manuelle (pas de dépendance symfony/validator requise)
 
 #[Route('/api', name: 'api_')]
 class RideController extends AbstractController
@@ -152,6 +152,17 @@ class RideController extends AbstractController
         $ride = $rides->find($id);
         if (!$ride) {
             return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        // ❗ P0: interdire au conducteur de réserver son propre trajet
+        if ($ride->getDriver() && $ride->getDriver()->getId() === $userId) {
+            return $this->json(['error' => 'Driver cannot book own ride'], Response::HTTP_CONFLICT);
+        }
+
+        // ❗ P0: interdire la réservation si le trajet est passé / déjà démarré
+        $now = new \DateTimeImmutable('now');
+        if ($ride->getStartAt() && $ride->getStartAt() < $now) {
+            return $this->json(['error' => 'Ride already started or past'], Response::HTTP_CONFLICT);
         }
 
         // Seats (default 1)
@@ -343,7 +354,81 @@ class RideController extends AbstractController
             ];
         }, $rides);
 
-        // on renvoie directement le tableau (plus simple côté front)
+        return $this->json($out);
+    }
+
+    /**
+     * Trajets d’un conducteur (pour /account)
+     * GET /api/users/{id}/rides
+     */
+    #[Route('/users/{id<\d+>}/rides', name: 'user_rides', methods: ['GET'])]
+    public function userRides(int $id, EntityManagerInterface $em): JsonResponse
+    {
+        $userRef = $em->getReference(User::class, $id);
+        $rides = $em->getRepository(Ride::class)->findBy(
+            ['driver' => $userRef],
+            ['startAt' => 'DESC']
+        );
+
+        $out = [];
+        foreach ($rides as $r) {
+            $v = $r->getVehicle();
+            $out[] = [
+                'id'         => $r->getId(),
+                'from'       => $r->getFromCity(),
+                'to'         => $r->getToCity(),
+                'startAt'    => $r->getStartAt()?->format('Y-m-d H:i'),
+                'endAt'      => $r->getEndAt()?->format('Y-m-d H:i'),
+                'price'      => $r->getPrice() !== null ? (float)$r->getPrice() : null,
+                'seatsLeft'  => $r->getSeatsLeft(),
+                'seatsTotal' => $r->getSeatsTotal(),
+                'status'     => $r->getStatus(),
+                'vehicle'    => $v ? [
+                    'brand' => $v->getBrand()?->getName(),
+                    'model' => $v->getModel(),
+                    'eco'   => (bool)($v->isEco() ?? false),
+                ] : null,
+            ];
+        }
+
+        return $this->json($out);
+    }
+
+    /**
+     * Réservations d’un utilisateur
+     * GET /api/users/{id}/bookings
+     */
+    #[Route('/users/{id<\d+>}/bookings', name: 'user_bookings', methods: ['GET'])]
+    public function userBookings(int $id, EntityManagerInterface $em): JsonResponse
+    {
+        $userRef = $em->getReference(User::class, $id);
+        $parts = $em->getRepository(RideParticipant::class)->findBy(
+            ['user' => $userRef],
+            ['id' => 'DESC']
+        );
+
+        $out = [];
+        foreach ($parts as $p) {
+            $r = $p->getRide();
+            $driver = $r->getDriver();
+            $out[] = [
+                'id'          => $p->getId(),
+                'seatsBooked' => $p->getSeatsBooked(),
+                'status'      => $p->getStatus(),
+                'ride'        => [
+                    'id'      => $r->getId(),
+                    'from'    => $r->getFromCity(),
+                    'to'      => $r->getToCity(),
+                    'startAt' => $r->getStartAt()?->format('Y-m-d H:i'),
+                    'price'   => $r->getPrice() !== null ? (float)$r->getPrice() : null,
+                    'driver'  => $driver ? [
+                        'id'     => $driver->getId(),
+                        'pseudo' => $driver->getPseudo(),
+                    ] : null,
+                ],
+            ];
+        }
+
         return $this->json($out);
     }
 
@@ -353,8 +438,7 @@ class RideController extends AbstractController
     #[Route('/rides', name: 'ride_create', methods: ['POST'])]
     public function createRide(
         Request $req,
-        ManagerRegistry $doctrine,
-        ValidatorInterface $validator
+        ManagerRegistry $doctrine
     ): JsonResponse {
         $em = $doctrine->getManager();
 
@@ -365,25 +449,19 @@ class RideController extends AbstractController
             return $this->json(['error' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
         }
 
-        $constraints = new Assert\Collection([
-            'driverId' => [new Assert\NotBlank(), new Assert\Type('integer'), new Assert\Positive()],
-            'vehicle'  => [new Assert\NotBlank(), new Assert\Type('array')],
-            'fromCity' => [new Assert\NotBlank(), new Assert\Type('string')],
-            'toCity'   => [new Assert\NotBlank(), new Assert\Type('string')],
-            'startAt'  => [new Assert\NotBlank(), new Assert\Type('string')],
-            'endAt'    => [new Assert\NotBlank(), new Assert\Type('string')],
-            'price'    => [new Assert\NotBlank(), new Assert\Type(['double','numeric'])],
-            'allowSmoker'  => [new Assert\Optional([new Assert\Type('bool')])],
-            'allowAnimals' => [new Assert\Optional([new Assert\Type('bool')])],
-            'musicStyle'   => [new Assert\Optional([new Assert\Type('string')])],
-        ]);
-
-        $violations = $validator->validate($data, $constraints);
-        if (count($violations) > 0) {
-            return $this->json([
-                'error' => 'Validation failed',
-                'details' => array_map(fn($v) => $v->getPropertyPath().' '.$v->getMessage(), iterator_to_array($violations))
-            ], Response::HTTP_BAD_REQUEST);
+        // Validation simple
+        $errors = [];
+        $isInt = static fn($v) => filter_var($v, FILTER_VALIDATE_INT) !== false;
+        $isNum = static fn($v) => is_numeric($v);
+        if (!isset($data['driverId']) || !$isInt($data['driverId']) || (int)$data['driverId'] <= 0) $errors[] = 'driverId invalide';
+        if (!isset($data['vehicle']) || !is_array($data['vehicle'])) $errors[] = 'vehicle manquant';
+        if (!isset($data['fromCity']) || trim((string)$data['fromCity']) === '') $errors[] = 'fromCity requis';
+        if (!isset($data['toCity']) || trim((string)$data['toCity']) === '') $errors[] = 'toCity requis';
+        if (!isset($data['startAt']) || trim((string)$data['startAt']) === '') $errors[] = 'startAt requis';
+        if (!isset($data['endAt']) || trim((string)$data['endAt']) === '') $errors[] = 'endAt requis';
+        if (!isset($data['price']) || !$isNum($data['price'])) $errors[] = 'price invalide';
+        if ($errors) {
+            return $this->json(['error' => 'Validation failed', 'details' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
         /** @var User|null $driver */
@@ -419,6 +497,18 @@ class RideController extends AbstractController
             $end   = new \DateTimeImmutable((string)$data['endAt']);
         } catch (\Exception) {
             return $this->json(['error' => 'Format datetime invalide (attendu: Y-m-d H:i)'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // ❗ P0: règles de cohérence sur les dates & prix
+        $now = new \DateTimeImmutable('now');
+        if ($start < $now) {
+            return $this->json(['error' => 'startAt must be in the future'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($end <= $start) {
+            return $this->json(['error' => 'endAt must be after startAt'], Response::HTTP_BAD_REQUEST);
+        }
+        if ((float)$data['price'] <= 0) {
+            return $this->json(['error' => 'price must be greater than 0'], Response::HTTP_BAD_REQUEST);
         }
 
         $ride = (new Ride())
