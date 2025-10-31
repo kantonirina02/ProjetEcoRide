@@ -13,10 +13,28 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route('/api/auth', name: 'api_auth_')]
 class AuthController extends AbstractController
 {
+    /** ---------------- Utils simples de validation ---------------- */
+    private function isValidEmail(string $email): bool
+    {
+        return (bool) filter_var($email, FILTER_VALIDATE_EMAIL);
+    }
+
+    /**
+     * Exigences minimales côté backend 
+     */
+    private function isValidPassword(string $password): bool
+    {
+        return \strlen($password) >= 8;
+    }
+
+    /** ------------------------- LOGIN ----------------------------- */
     /**
      * POST /api/auth/login
-     * Body: {"email":"user1@mail.test","password":"Passw0rd!"}
-     * DEV/MOCK : on ne vérifie pas le hash, on dépose l’ID en session.
+     * Body: {"email":"...","password":"..."}
+     * - Vérifie l’existence de l’utilisateur
+     * - Vérifie le mot de passe via password_verify()
+     * - Fallback DEV: si le hash en base n’est pas un hash (pas de $2y$), autorise une égalité simple
+     * - Dépose la session (user_id, user_email, user_pseudo)
      */
     #[Route('/login', name: 'login', methods: ['POST'])]
     public function login(Request $request, EntityManagerInterface $em): JsonResponse
@@ -28,17 +46,28 @@ class AuthController extends AbstractController
             return $this->json(['error' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
         }
 
-        $email = trim((string)($data['email'] ?? ''));
+        $email = strtolower(trim((string)($data['email'] ?? '')));
         $password = (string)($data['password'] ?? '');
+
         if ($email === '' || $password === '') {
             return $this->json(['error' => 'email et password requis'], Response::HTTP_BAD_REQUEST);
         }
 
+        /** @var User|null $user */
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user) {
             return $this->json(['error' => 'Utilisateur inconnu'], Response::HTTP_UNAUTHORIZED);
         }
 
+        $stored = (string)($user->getPassword() ?? '');
+        $isHash = str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2');
+
+        $ok = $isHash ? password_verify($password, $stored) : ($stored !== '' && hash_equals($stored, $password));
+        if (!$ok) {
+            return $this->json(['error' => 'Mot de passe invalide'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // Session
         $s = $request->getSession();
         $s->set('user_id',     $user->getId());
         $s->set('user_email',  $user->getEmail());
@@ -54,6 +83,7 @@ class AuthController extends AbstractController
         ]);
     }
 
+    /** -------------------------- ME ------------------------------- */
     /** GET /api/auth/me */
     #[Route('/me', name: 'me', methods: ['GET'])]
     public function me(Request $request): JsonResponse
@@ -71,6 +101,7 @@ class AuthController extends AbstractController
         ]);
     }
 
+    /** ------------------------- LOGOUT ---------------------------- */
     /** POST /api/auth/logout */
     #[Route('/logout', name: 'logout', methods: ['POST'])]
     public function logout(Request $request): JsonResponse
@@ -78,8 +109,19 @@ class AuthController extends AbstractController
         $request->getSession()->invalidate();
         return $this->json(['ok' => true]);
     }
-    
+
+    /** ------------------------ SIGNUP/REGISTER -------------------- */
+    /**
+     * POST /api/auth/signup    (alias historique conservé)
+     * POST /api/auth/register  (nouvel alias REST)
+     * Body: {"email":"...","password":"...","pseudo":"..."}
+     * - Email format + unique
+     * - Password >= 8 chars (BCrypt)
+     * - Pseudo requis (sinon dérivé de l’email avant @)
+     * - Auto-login après création
+     */
     #[Route('/signup', name: 'signup', methods: ['POST'])]
+    #[Route('/register', name: 'register', methods: ['POST'])]
     public function signup(Request $request, EntityManagerInterface $em): JsonResponse
     {
         $raw = $request->getContent() ?? '';
@@ -89,23 +131,29 @@ class AuthController extends AbstractController
             return $this->json(['error' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
         }
 
-        $email  = trim((string)($data['email']  ?? ''));
+        $email  = strtolower(trim((string)($data['email']  ?? '')));
         $pass   = (string)($data['password']   ?? '');
         $pseudo = trim((string)($data['pseudo'] ?? ''));
 
         if ($email === '' || $pass === '') {
             return $this->json(['error' => 'email et password requis'], Response::HTTP_BAD_REQUEST);
         }
-        if ($em->getRepository(\App\Entity\User::class)->findOneBy(['email' => $email])) {
+        if (!$this->isValidEmail($email)) {
+            return $this->json(['error' => 'email invalide'], Response::HTTP_BAD_REQUEST);
+        }
+        if (!$this->isValidPassword($pass)) {
+            return $this->json(['error' => 'mot de passe trop court (>= 8)'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
             return $this->json(['error' => 'email déjà utilisé'], Response::HTTP_CONFLICT);
         }
 
-        $user = new \App\Entity\User();
-        $user->setEmail($email);
-        $user->setPassword(password_hash($pass, PASSWORD_BCRYPT)); // simple
-        $user->setPseudo($pseudo !== '' ? $pseudo : explode('@', $email)[0]);
-        $user->setRoles(['ROLE_USER']);
-        $user->setCreatedAt(new \DateTimeImmutable());
+        $user = (new User())
+            ->setEmail($email)
+            ->setPassword(password_hash($pass, PASSWORD_BCRYPT))
+            ->setPseudo($pseudo !== '' ? $pseudo : explode('@', $email)[0])
+            ->setRoles(['ROLE_USER'])
+            ->setCreatedAt(new \DateTimeImmutable());
 
         $em->persist($user);
         $em->flush();
@@ -125,5 +173,4 @@ class AuthController extends AbstractController
             ],
         ], Response::HTTP_CREATED);
     }
-
 }
