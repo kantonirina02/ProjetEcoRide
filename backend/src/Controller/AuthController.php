@@ -78,4 +78,52 @@ class AuthController extends AbstractController
         $request->getSession()->invalidate();
         return $this->json(['ok' => true]);
     }
+    
+    #[Route('/signup', name: 'signup', methods: ['POST'])]
+    public function signup(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $raw = $request->getContent() ?? '';
+        try {
+            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $this->json(['error' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $email  = trim((string)($data['email']  ?? ''));
+        $pass   = (string)($data['password']   ?? '');
+        $pseudo = trim((string)($data['pseudo'] ?? ''));
+
+        if ($email === '' || $pass === '') {
+            return $this->json(['error' => 'email et password requis'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($em->getRepository(\App\Entity\User::class)->findOneBy(['email' => $email])) {
+            return $this->json(['error' => 'email déjà utilisé'], Response::HTTP_CONFLICT);
+        }
+
+        $user = new \App\Entity\User();
+        $user->setEmail($email);
+        $user->setPassword(password_hash($pass, PASSWORD_BCRYPT)); // simple
+        $user->setPseudo($pseudo !== '' ? $pseudo : explode('@', $email)[0]);
+        $user->setRoles(['ROLE_USER']);
+        $user->setCreatedAt(new \DateTimeImmutable());
+
+        $em->persist($user);
+        $em->flush();
+
+        // connexion auto
+        $s = $request->getSession();
+        $s->set('user_id',     $user->getId());
+        $s->set('user_email',  $user->getEmail());
+        $s->set('user_pseudo', $user->getPseudo());
+
+        return $this->json([
+            'ok'   => true,
+            'user' => [
+                'id'     => $user->getId(),
+                'email'  => $user->getEmail(),
+                'pseudo' => $user->getPseudo(),
+            ],
+        ], Response::HTTP_CREATED);
+    }
+
 }
