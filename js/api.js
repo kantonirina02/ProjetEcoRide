@@ -92,3 +92,11 @@ export async function createRide(payload) {
   });
   return json(res);
 }
+/* ---------- Détail d'un trajet ---------- */
+export async function fetchRide(id) {
+  const res = await fetch(`${API_BASE}/rides/${id}`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}

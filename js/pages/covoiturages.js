@@ -77,6 +77,7 @@ function card(r, state) {
         <div class="text-end">
           <div class="fs-5 fw-bold">${price} €</div>
           ${btnHtml}
+          <a class="btn btn-link btn-sm mt-1 p-0" href="/ride?id=${r.id}" data-link>Voir le détail</a>
         </div>
       </div>
     </div>

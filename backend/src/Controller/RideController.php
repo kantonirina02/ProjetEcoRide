@@ -548,4 +548,69 @@ class RideController extends AbstractController
             'status'    => $ride->getStatus(),
         ], Response::HTTP_CREATED);
     }
+       /**
+ * Détail d’un trajet + participants
+ * GET /api/rides/{id}
+ */
+#[Route('/rides/{id<\d+>}', name: 'ride_show', methods: ['GET'])]
+public function showRide(int $id, Request $req, EntityManagerInterface $em): JsonResponse
+{
+    /** @var Ride|null $r */
+    $r = $em->getRepository(Ride::class)->find($id);
+    if (!$r) {
+        return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+    }
+
+    $sessionUserId = (int)($req->getSession()->get('user_id') ?? 0);
+    $v = $r->getVehicle();
+    $brand = $v?->getBrand();
+    $driver = $r->getDriver();
+
+    $isDriverViewing = $sessionUserId > 0 && $driver && $driver->getId() === $sessionUserId;
+
+    // participants
+    $parts = $em->getRepository(RideParticipant::class)->findBy(['ride' => $r], ['id' => 'ASC']);
+    $participants = [];
+    foreach ($parts as $p) {
+        $u = $p->getUser();
+        $isSelf = $sessionUserId > 0 && $u && $u->getId() === $sessionUserId;
+        $participants[] = [
+            'user'   => $u ? [
+                'id'     => $u->getId(),
+                'pseudo' => $u->getPseudo(),
+                // on ne montre l’email que pour le conducteur ou soi-même
+                'email'  => ($isDriverViewing || $isSelf) ? $u->getEmail() : null,
+            ] : null,
+            'seats'  => $p->getSeatsBooked(),
+            'status' => $p->getStatus(),
+        ];
+    }
+
+    return $this->json([
+        'id'         => $r->getId(),
+        'from'       => $r->getFromCity(),
+        'to'         => $r->getToCity(),
+        'startAt'    => $r->getStartAt()?->format('Y-m-d H:i'),
+        'endAt'      => $r->getEndAt()?->format('Y-m-d H:i'),
+        'price'      => $r->getPrice() !== null ? (float)$r->getPrice() : null,
+        'seatsLeft'  => (int)$r->getSeatsLeft(),
+        'seatsTotal' => (int)$r->getSeatsTotal(),
+        'status'     => $r->getStatus(),
+        'vehicle'    => $v ? [
+            'brand'  => $brand?->getName(),
+            'model'  => $v->getModel(),
+            'eco'    => (bool)($v->isEco() ?? false),
+            'energy' => $v->getEnergy(),
+            'color'  => $v->getColor(),
+        ] : null,
+        'driver'     => $driver ? [
+            'id'     => $driver->getId(),
+            'pseudo' => $driver->getPseudo(),
+            // idem : email visible uniquement pour le conducteur lui-même
+            'email'  => ($isDriverViewing && $sessionUserId === $driver->getId()) ? $driver->getEmail() : null,
+        ] : null,
+        'participants' => $participants,
+    ]);
+}
+
 }
