@@ -13,28 +13,28 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route('/api/auth', name: 'api_auth_')]
 class AuthController extends AbstractController
 {
-    /** ---------------- Utils simples de validation ---------------- */
+    /* ---------------- Utils de validation ---------------- */
+
     private function isValidEmail(string $email): bool
     {
         return (bool) filter_var($email, FILTER_VALIDATE_EMAIL);
     }
 
-    /**
-     * Exigences minimales côté backend 
-     */
-    private function isValidPassword(string $password): bool
+    private function isStrongPassword(string $password): bool
     {
-        return \strlen($password) >= 8;
+        if (strlen($password) < 8) return false;
+        $hasLower = preg_match('/[a-z]/', $password);
+        $hasUpper = preg_match('/[A-Z]/', $password);
+        $hasDigit = preg_match('/\d/', $password);
+        $hasSpec  = preg_match('/[^A-Za-z0-9]/', $password);
+        return $hasLower && $hasUpper && $hasDigit && $hasSpec;
     }
 
-    /** ------------------------- LOGIN ----------------------------- */
+    /* --------------------------- LOGIN --------------------------- */
+
     /**
      * POST /api/auth/login
      * Body: {"email":"...","password":"..."}
-     * - Vérifie l’existence de l’utilisateur
-     * - Vérifie le mot de passe via password_verify()
-     * - Fallback DEV: si le hash en base n’est pas un hash (pas de $2y$), autorise une égalité simple
-     * - Dépose la session (user_id, user_email, user_pseudo)
      */
     #[Route('/login', name: 'login', methods: ['POST'])]
     public function login(Request $request, EntityManagerInterface $em): JsonResponse
@@ -61,8 +61,8 @@ class AuthController extends AbstractController
 
         $stored = (string)($user->getPassword() ?? '');
         $isHash = str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2');
-
         $ok = $isHash ? password_verify($password, $stored) : ($stored !== '' && hash_equals($stored, $password));
+
         if (!$ok) {
             return $this->json(['error' => 'Mot de passe invalide'], Response::HTTP_UNAUTHORIZED);
         }
@@ -83,7 +83,8 @@ class AuthController extends AbstractController
         ]);
     }
 
-    /** -------------------------- ME ------------------------------- */
+    /* ----------------------------- ME ---------------------------- */
+
     /** GET /api/auth/me */
     #[Route('/me', name: 'me', methods: ['GET'])]
     public function me(Request $request): JsonResponse
@@ -101,7 +102,8 @@ class AuthController extends AbstractController
         ]);
     }
 
-    /** ------------------------- LOGOUT ---------------------------- */
+    /* --------------------------- LOGOUT -------------------------- */
+
     /** POST /api/auth/logout */
     #[Route('/logout', name: 'logout', methods: ['POST'])]
     public function logout(Request $request): JsonResponse
@@ -110,15 +112,11 @@ class AuthController extends AbstractController
         return $this->json(['ok' => true]);
     }
 
-    /** ------------------------ SIGNUP/REGISTER -------------------- */
+    /* --------------------- SIGNUP / REGISTER --------------------- */
+
     /**
-     * POST /api/auth/signup    (alias historique conservé)
-     * POST /api/auth/register  (nouvel alias REST)
-     * Body: {"email":"...","password":"...","pseudo":"..."}
-     * - Email format + unique
-     * - Password >= 8 chars (BCrypt)
-     * - Pseudo requis (sinon dérivé de l’email avant @)
-     * - Auto-login après création
+     * POST /api/auth/signup    (alias historique)
+     * POST /api/auth/register  (alias REST)
      */
     #[Route('/signup', name: 'signup', methods: ['POST'])]
     #[Route('/register', name: 'register', methods: ['POST'])]
@@ -141,8 +139,8 @@ class AuthController extends AbstractController
         if (!$this->isValidEmail($email)) {
             return $this->json(['error' => 'email invalide'], Response::HTTP_BAD_REQUEST);
         }
-        if (!$this->isValidPassword($pass)) {
-            return $this->json(['error' => 'mot de passe trop court (>= 8)'], Response::HTTP_BAD_REQUEST);
+        if (!$this->isStrongPassword($pass)) {
+            return $this->json(['error' => 'mot de passe faible (≥8, 1Aa, 1 chiffre, 1 spécial)'], Response::HTTP_BAD_REQUEST);
         }
         if ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
             return $this->json(['error' => 'email déjà utilisé'], Response::HTTP_CONFLICT);
