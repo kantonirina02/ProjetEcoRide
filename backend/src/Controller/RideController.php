@@ -440,6 +440,12 @@ class RideController extends AbstractController
         Request $req,
         ManagerRegistry $doctrine
     ): JsonResponse {
+        $session = $req->getSession();
+        $userId = (int)($session->get('user_id') ?? 0);
+        if ($userId <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
         $em = $doctrine->getManager();
 
         $raw = $req->getContent() ?? '';
@@ -453,7 +459,6 @@ class RideController extends AbstractController
         $errors = [];
         $isInt = static fn($v) => filter_var($v, FILTER_VALIDATE_INT) !== false;
         $isNum = static fn($v) => is_numeric($v);
-        if (!isset($data['driverId']) || !$isInt($data['driverId']) || (int)$data['driverId'] <= 0) $errors[] = 'driverId invalide';
         if (!isset($data['vehicle']) || !is_array($data['vehicle'])) $errors[] = 'vehicle manquant';
         if (!isset($data['fromCity']) || trim((string)$data['fromCity']) === '') $errors[] = 'fromCity requis';
         if (!isset($data['toCity']) || trim((string)$data['toCity']) === '') $errors[] = 'toCity requis';
@@ -464,8 +469,12 @@ class RideController extends AbstractController
             return $this->json(['error' => 'Validation failed', 'details' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
+        if (isset($data['driverId']) && $isInt($data['driverId']) && (int)$data['driverId'] !== $userId) {
+            return $this->json(['error' => 'driverId ne correspond pas à l’utilisateur connecté'], Response::HTTP_FORBIDDEN);
+        }
+
         /** @var User|null $driver */
-        $driver = $em->getRepository(User::class)->find((int)$data['driverId']);
+        $driver = $em->getRepository(User::class)->find($userId);
         if (!$driver) {
             return $this->json(['error' => 'Driver not found'], Response::HTTP_NOT_FOUND);
         }
@@ -499,7 +508,7 @@ class RideController extends AbstractController
             return $this->json(['error' => 'Format datetime invalide (attendu: Y-m-d H:i)'], Response::HTTP_BAD_REQUEST);
         }
 
-        // ❗ P0: règles de cohérence sur les dates & prix
+        // règles de cohérence sur les dates & prix
         $now = new \DateTimeImmutable('now');
         if ($start < $now) {
             return $this->json(['error' => 'startAt must be in the future'], Response::HTTP_BAD_REQUEST);
@@ -606,7 +615,7 @@ public function showRide(int $id, Request $req, EntityManagerInterface $em): Jso
         'driver'     => $driver ? [
             'id'     => $driver->getId(),
             'pseudo' => $driver->getPseudo(),
-            // idem : email visible uniquement pour le conducteur lui-même
+            // email visible uniquement pour le conducteur lui-même
             'email'  => ($isDriverViewing && $sessionUserId === $driver->getId()) ? $driver->getEmail() : null,
         ] : null,
         'participants' => $participants,

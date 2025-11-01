@@ -25,14 +25,15 @@ security:
     # publics
     - { path: ^/api/health$, roles: PUBLIC_ACCESS, methods: [GET] }
     - { path: ^/api/rides$, roles: PUBLIC_ACCESS, methods: [GET] }
+    - { path: ^/api/rides$, roles: ROLE_USER, methods: [POST] }
     - { path: ^/api/auth/(login|logout|me)$, roles: PUBLIC_ACCESS }
     - { path: ^/api/auth/signup$, roles: PUBLIC_ACCESS, methods: [POST] }
     - { path: ^/api/auth/register$, roles: PUBLIC_ACCESS, methods: [POST] }
-    - { path: ^/api/auth/check-email$, roles: PUBLIC_ACCESS, methods: [GET] }  # <-- AJOUT
+    - { path: ^/api/auth/check-email$, roles: PUBLIC_ACCESS, methods: [GET] }  
     - { path: ^/api/me/bookings$, roles: PUBLIC_ACCESS, methods: [GET] }
 
     # protégés (gérés côté contrôleur par session)
-    - { path: ^/api/rides/\d+/book$, roles: PUBLIC_ACCESS, methods: [POST,DELETE] }
+    - { path: ^/api/rides/\d+/book$, roles: ROLE_USER, methods: [POST,DELETE] }
 
 when@test:
   security:
