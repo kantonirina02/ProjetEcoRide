@@ -13,19 +13,20 @@ const $accName     = document.getElementById("acc-name");
 const $accEmail    = document.getElementById("acc-email");
 const $accUserId   = document.getElementById("acc-userid");
 
-// Réservations
-const $bFeedback   = document.getElementById("account-bookings-feedback");
-const $bUp         = document.getElementById("account-bookings-upcoming");
-const $bPast       = document.getElementById("account-bookings-past");
-const $bCountUp    = document.getElementById("count-bookings-upcoming");
-const $bCountPast  = document.getElementById("count-bookings-past");
+// réservations
+const data = await fetchMyBookings();
+const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
+const cmpAsc  = (a,b) => (parseDt(a.startAt)?.getTime() ?? 0) - (parseDt(b.startAt)?.getTime() ?? 0);
+const cmpDesc = (a,b) => (parseDt(b.startAt)?.getTime() ?? 0) - (parseDt(a.startAt)?.getTime() ?? 0);
+const up   = bookings.filter(b => !isPast(b.startAt)).sort(cmpAsc);
+const past = bookings.filter(b =>  isPast(b.startAt)).sort(cmpDesc);
 
-// Trajets conducteur
-const $rFeedback   = document.getElementById("account-rides-feedback");
-const $rUp         = document.getElementById("account-rides-upcoming");
-const $rPast       = document.getElementById("account-rides-past");
-const $rCountUp    = document.getElementById("count-rides-upcoming");
-const $rCountPast  = document.getElementById("count-rides-past");
+
+// trajets conducteur
+const rides = await res.json();
+const upR   = (rides || []).filter(r => !isPast(r.startAt)).sort(cmpAsc);
+const pastR = (rides || []).filter(r =>  isPast(r.startAt)).sort(cmpDesc);
+
 
 // ---- utils ----
 function parseDt(s) {
@@ -43,8 +44,12 @@ function fmtPrice(p) {
   const n = Number(p);
   return isFinite(n) ? `${n.toFixed(2)} €` : `${p} €`;
 }
-function badge(text, variant = "secondary") {
-  return `<span class="badge text-bg-${variant}">${text}</span>`;
+function badge(text) {
+  const t = String(text || "").toLowerCase();
+  const v = (t === "open" || t === "confirmed") ? "success"
+        : (t === "cancelled" || t === "canceled") ? "danger"
+        : "secondary";
+  return `<span class="badge text-bg-${v}">${text || "—"}</span>`;
 }
 
 // ---- views ----
