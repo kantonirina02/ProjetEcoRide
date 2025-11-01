@@ -1,4 +1,13 @@
-const API_BASE = "http://localhost:8001/api";
+export const API_BASE = (() => {
+  const origin = window.location.origin;
+  if (origin.includes(":8001") || origin.includes(":8002")) {
+    return `${origin}/api`;
+  }
+  if (origin.startsWith("http")) {
+    return "http://localhost:8001/api";
+  }
+  return "http://127.0.0.1:8001/api";
+})();
 
 async function json(res) {
   if (!res.ok) {
@@ -25,10 +34,14 @@ export async function fetchRides({ from = "", to = "", date = "", eco, priceMax,
     headers: { Accept: "application/json" },
     credentials: "include",
   });
-  return json(res);
+  const payload = await json(res);
+  if (payload && typeof payload === "object" && "rides" in payload) {
+    return payload;
+  }
+  return { rides: Array.isArray(payload) ? payload : [], suggestion: null };
 }
 
-/* ---------- Réservation / Annulation ---------- */
+/* ---------- RÃƒÆ’Ã‚Â©servation / Annulation ---------- */
 export async function bookRide(id, { seats = 1 } = {}) {
   const res = await fetch(`${API_BASE}/rides/${id}/book`, {
     method: "POST",
@@ -47,7 +60,7 @@ export async function unbookRide(rideId) {
   return json(res);
 }
 
-/* ---------- Mes réservations / Mes trajets ---------- */
+/* ---------- Mes rÃƒÆ’Ã‚Â©servations / Mes trajets ---------- */
 export async function fetchMyBookings() {
   const res = await fetch(`${API_BASE}/me/bookings`, { credentials: "include" });
   return json(res); // { auth:boolean, bookings:[...] }
@@ -87,7 +100,7 @@ export async function logout() {
   });
 }
 
-/* ---------- Création de trajet ---------- */
+/* ---------- CrÃƒÆ’Ã‚Â©ation de trajet ---------- */
 export async function createRide(payload) {
   const res = await fetch(`${API_BASE}/rides`, {
     method: "POST",
@@ -98,7 +111,7 @@ export async function createRide(payload) {
   return json(res);
 }
 
-/* ---------- Détail d'un trajet ---------- */
+/* ---------- DÃƒÆ’Ã‚Â©tail d'un trajet ---------- */
 export async function fetchRide(id) {
   const res = await fetch(`${API_BASE}/rides/${id}`, {
     headers: { Accept: "application/json" },
@@ -110,3 +123,15 @@ export async function fetchRide(id) {
   }
   return json(res);
 }
+
+export async function fetchMyVehicles() {
+  const res = await fetch(`${API_BASE}/me/vehicles`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
+
+
+

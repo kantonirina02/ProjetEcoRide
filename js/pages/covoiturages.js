@@ -1,95 +1,135 @@
 import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
 
-const getSession = () => (window.__session ?? null);
+const getSession = () => window.__session ?? null;
 
 const $form = document.getElementById("rideSearchForm");
 const $from = document.getElementById("departure");
-const $to   = document.getElementById("arrival");
+const $to = document.getElementById("arrival");
 const $date = document.getElementById("date");
-const $err  = document.getElementById("search-error-covoit");
+const $err = document.getElementById("search-error-covoit");
 const $list = document.getElementById("covoit-list");
 const $feedback = document.getElementById("results-feedback");
 
-const $eco   = document.getElementById("ecoFilter");
-const $pmax  = document.getElementById("priceFilter");
-const $dmax  = document.getElementById("durationFilter");
-const $rmin  = document.getElementById("ratingFilter");
+const $eco = document.getElementById("ecoFilter");
+const $pmax = document.getElementById("priceFilter");
+const $dmax = document.getElementById("durationFilter");
+const $rmin = document.getElementById("ratingFilter");
 
-// --- Utilitaires
-const navigate = (href) => {
+const FALLBACK_PHOTO = "/images/Andrea.jpg";
+
+function navigate(href) {
   if (typeof window.navigate === "function") {
     window.navigate(href);
   } else {
     window.location.href = href;
   }
-};
+}
 
 async function fetchMyBookedRideIds() {
   try {
-    const data = await fetchMyBookings(); // { auth:boolean, bookings:[...] }
-    const ids = new Set(
-      Array.isArray(data?.bookings)
-        ? data.bookings.map(x => (typeof x === "number" ? x : x.rideId)).filter(Boolean)
-        : []
+    const data = await fetchMyBookings();
+    if (!data?.auth || !Array.isArray(data.bookings)) return new Set();
+    return new Set(
+      data.bookings
+        .map((item) => (typeof item === "number" ? item : item.rideId))
+        .filter(Boolean)
     );
-    return ids;
-  } catch {
+  } catch (error) {
+    console.error("fetchMyBookings failed", error);
     return new Set();
   }
 }
 
-// --- Pré-remplissage via querystring
 (function prefillFromQuery() {
   const q = new URLSearchParams(window.location.search);
   if (q.has("from")) $from.value = q.get("from");
-  if (q.has("to"))   $to.value   = q.get("to");
+  if (q.has("to")) $to.value = q.get("to");
   if (q.has("date")) $date.value = q.get("date");
 })();
 
-function card(r, state) {
-  const price = typeof r.price === "number" ? r.price.toFixed(2) : r.price;
+function formatRating(driver) {
+  if (!driver) return "";
+  if (typeof driver.rating === "number") {
+    const count = driver.reviews ?? 0;
+    return `<span class="badge text-bg-success"><i class="bi bi-star-fill me-1"></i>${driver.rating.toFixed(1)} (${count})</span>`;
+  }
+  return "";
+}
 
-  // Règles d’état bouton
+function cardTemplate(ride, state) {
   const session = getSession();
-  const isDriver = !!(session?.user?.id) && r?.driver?.id === session.user.id;
-  const soldOut  = (r.seatsLeft ?? 0) <= 0;
-  const alreadyBooked = state.bookedIds.has(r.id);
+  const isDriver = !!(session?.user?.id) && ride?.driver?.id === session.user.id;
+  const soldOut = ride.soldOut || (ride.seatsLeft ?? 0) <= 0;
+  const alreadyBooked = state.bookedIds.has(ride.id);
 
-  let btnHtml = "";
+  let actionHtml = "";
   if (isDriver) {
-    btnHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous êtes le conducteur</button>`;
+    actionHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous etes le conducteur</button>`;
   } else if (alreadyBooked) {
-    btnHtml = `<button class="btn btn-success btn-sm" disabled>Réservé ✓</button>`;
+    actionHtml = `<button class="btn btn-success btn-sm" disabled>Reserve</button>`;
   } else if (soldOut) {
-    btnHtml = `<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>`;
+    actionHtml = `<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>`;
   } else {
-    btnHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${r.id}">Réserver</button>`;
+    actionHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${ride.id}">Reserver</button>`;
   }
 
-  const vehBrand = r?.vehicle?.brand ?? "";
-  const vehModel = r?.vehicle?.model ?? "";
-  const vehEco   = r?.vehicle?.eco ? "🌿" : "";
+  const vehicle = ride.vehicle || {};
+  const driver = ride.driver || {};
+  const driverPhoto = driver.photo || FALLBACK_PHOTO;
+  const ratingHtml = formatRating(driver);
 
   return `
     <div class="card mb-3 shadow-sm">
-      <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
-        <div>
-          <div class="fw-semibold">${r.from} ➜ ${r.to}</div>
-          <div class="small text-muted">
-            ${r.startAt ?? ""} • ${r.seatsLeft ?? 0}/${r.seatsTotal ?? 0} places • 
-            ${vehBrand} ${vehModel} ${vehEco}
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3">
+          <div class="flex-shrink-0">
+            <img src="${driverPhoto}" alt="${driver.pseudo ?? "Conducteur"}" class="rounded-circle border" style="width:64px;height:64px;object-fit:cover;">
           </div>
-        </div>
-        <div class="text-end">
-          <div class="fs-5 fw-bold">${price} €</div>
-          <div class="mt-2 d-flex gap-2 justify-content-end">
-            <a class="btn btn-light btn-sm" href="/ride?id=${r.id}" data-link>Voir le détail</a>
-            ${btnHtml}
+          <div class="flex-grow-1">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <div class="fw-semibold">${ride.from} → ${ride.to}</div>
+                <div class="small text-muted">${ride.startAt ?? ""} · ${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places · ${vehicle.brand ?? ""} ${vehicle.model ?? ""}${vehicle.eco ? " · Trajet eco" : ""}</div>
+                ${ratingHtml ? `<div class="mt-1">${ratingHtml}</div>` : ""}
+              </div>
+              <div class="text-end">
+                ${soldOut ? '<div class="badge text-bg-danger mb-2">Complet</div>' : ""}
+                <div class="fs-5 fw-bold">${typeof ride.price === "number" ? ride.price.toFixed(2) : ride.price} €</div>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+              <div class="text-muted small">Conducteur : <strong>${driver.pseudo ?? "Inconnu"}</strong></div>
+              <div class="d-flex gap-2">
+                <a class="btn btn-light btn-sm" href="/ride?id=${ride.id}" data-link>Voir le detail</a>
+                ${actionHtml}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   `;
+}
+
+function renderSuggestion(suggestion) {
+  if (!suggestion) {
+    $feedback.textContent = "Aucun resultat.";
+    return;
+  }
+  const formattedDate = suggestion.startAt ? suggestion.startAt.replace(" ", " · ") : suggestion.date;
+  $feedback.innerHTML = `
+    <div class="alert alert-warning" role="alert">
+      Aucun trajet ne correspond exactement a votre recherche. Prochain trajet disponible :
+      <strong>${suggestion.from} → ${suggestion.to}</strong> le <strong>${formattedDate ?? "date inconnue"}</strong>.
+      <button class="btn btn-sm btn-outline-primary ms-2" id="applySuggestion">Utiliser cette date</button>
+    </div>
+  `;
+  document.getElementById("applySuggestion")?.addEventListener("click", () => {
+    if (suggestion.date && $date) {
+      $date.value = suggestion.date;
+    }
+    render();
+  });
 }
 
 async function render() {
@@ -98,31 +138,39 @@ async function render() {
   $list.innerHTML = "";
 
   try {
-    // 1) Récupère la liste de trajets
-    const items = await fetchRides({
+    const result = await fetchRides({
       from: $from?.value?.trim() || "",
-      to:   $to?.value?.trim()   || "",
+      to: $to?.value?.trim() || "",
       date: $date?.value || "",
-      // eco/priceMax/durationMax ne feront effet que lorsque api.js les transmettra au backend
       eco: ($eco && $eco.checked) ? 1 : undefined,
       priceMax: $pmax?.value ? Number($pmax.value) : undefined,
       durationMax: $dmax?.value ? Number($dmax.value) : undefined,
     });
 
-    // 2) Récupère les réservations de l’utilisateur (si connecté)
-    const bookedIds = await fetchMyBookedRideIds();
+    const rides = Array.isArray(result?.rides) ? result.rides : Array.isArray(result) ? result : [];
+    const suggestion = result?.suggestion ?? null;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      $feedback.textContent = "Aucun résultat.";
+    // filtre note minimale côté front si le backend ne le gère pas encore
+    const ratingMin = $rmin?.value ? Number($rmin.value) : null;
+    const filteredRides = ratingMin != null && !Number.isNaN(ratingMin)
+      ? rides.filter((ride) => typeof ride?.driver?.rating === "number" ? ride.driver.rating >= ratingMin : ratingMin <= 0)
+      : rides;
+
+    if (filteredRides.length === 0) {
+      $list.innerHTML = "";
+      renderSuggestion(suggestion);
       return;
     }
 
     $feedback.textContent = "";
+
+    const bookedIds = await fetchMyBookedRideIds();
     const state = { bookedIds };
-    $list.innerHTML = items.map(r => card(r, state)).join("");
+
+    $list.innerHTML = filteredRides.map((ride) => cardTemplate(ride, state)).join("");
     bindBookButtons();
-  } catch (e) {
-    console.error(e);
+  } catch (error) {
+    console.error(error);
     $feedback.textContent = "";
     $err.textContent = "Erreur de chargement des trajets.";
   }
@@ -133,7 +181,7 @@ function bindBookButtons() {
     btn.addEventListener("click", async () => {
       const session = getSession();
       if (!session || !session.user) {
-        alert("Connecte-toi d'abord pour réserver.");
+        alert("Connecte-toi d'abord pour reserver.");
         navigate("/signin");
         return;
       }
@@ -145,19 +193,14 @@ function bindBookButtons() {
 
       try {
         await bookRide(id, { seats: 1 });
-
-        // soit on recharge la liste:
-        // await render();
-
-        // soit on redirige vers /bookings :
         if (typeof window.navigate === "function") {
           window.navigate("/bookings");
         } else {
           window.location.href = "/bookings";
         }
-      } catch (e) {
-        console.error(e);
-        alert("Échec de la réservation");
+      } catch (error) {
+        console.error(error);
+        alert("Echec de la reservation");
       } finally {
         btn.disabled = false;
         btn.textContent = old;
@@ -167,39 +210,33 @@ function bindBookButtons() {
 }
 
 if ($form) {
-  $form.addEventListener("submit", (e) => {
-    e.preventDefault();
+  $form.addEventListener("submit", (event) => {
+    event.preventDefault();
     render();
   });
 
-  // Recharger quand un filtre change (si présents)
   const filterForm = document.getElementById("filterForm");
   if (filterForm) {
     filterForm.addEventListener("change", () => render());
   }
 
-  // Lancer direct si on arrive avec des query params
   if (($from && $from.value) || ($to && $to.value) || ($date && $date.value)) {
     render();
   }
 }
 
-// Affiche la section filtres
-function showFilters() {
+(function showFilters() {
   const wrap = document.getElementById("filter-section-wrapper");
   if (wrap) wrap.classList.remove("d-none");
-}
-    showFilters();
+})();
 
-// Bouton "Réinitialiser" des filtres
-document.getElementById("resetFilters")?.addEventListener("click", () => {
-  const eco = document.getElementById("ecoFilter");
-  const p   = document.getElementById("priceFilter");
-  const d   = document.getElementById("durationFilter");
-  const r   = document.getElementById("ratingFilter");
-  if (eco) eco.checked = false;
-  if (p)   p.value = "";
-  if (d)   d.value = "";
-  if (r)   r.value = "";
-  if (typeof render === "function") render();
-});
+const resetBtn = document.getElementById("resetFilters");
+if (resetBtn) {
+  resetBtn.addEventListener("click", () => {
+    if ($eco) $eco.checked = false;
+    if ($pmax) $pmax.value = "";
+    if ($dmax) $dmax.value = "";
+    if ($rmin) $rmin.value = "";
+    render();
+  });
+}
