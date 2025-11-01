@@ -3,26 +3,55 @@ import { me, fetchMyBookings, unbookRide, logout } from "../api.js";
 const API = "http://localhost:8001/api";
 
 const $welcome   = document.getElementById("account-welcome");
+
+// Réservations
 const $bFeedback = document.getElementById("account-bookings-feedback");
+const $bEmpty    = document.getElementById("account-bookings-empty");
 const $bList     = document.getElementById("account-bookings-list");
+
+// Trajets conducteur
 const $rFeedback = document.getElementById("account-rides-feedback");
+const $rEmpty    = document.getElementById("account-rides-empty");
 const $rList     = document.getElementById("account-rides-list");
+
+// Badges
+const $badgeBookings = document.getElementById("badge-bookings");
+const $badgeRides    = document.getElementById("badge-rides");
+const $badgeUpcoming = document.getElementById("badge-upcoming");
+const $badgePast     = document.getElementById("badge-past");
+
+// Logout
 const $btnLogout = document.getElementById("account-logout");
 
+// Utils date
 function parseDt(s) {
   if (!s) return null;
-  // backend: "YYYY-MM-DD HH:mm" → "YYYY-MM-DDTHH:mm"
-  const iso = s.replace(" ", "T");
-  const d = new Date(iso);
+  const d = new Date(s.replace(" ", "T"));
   return isNaN(d) ? null : d;
 }
 function isPast(s) {
   const d = parseDt(s);
   return d ? d.getTime() < Date.now() : false;
 }
+function fmtPrice(p) {
+  if (p == null) return "-";
+  const n = Number(p);
+  return isFinite(n) ? `${n.toFixed(2)} €` : `${p} €`;
+}
 
+// Toast minimal
+function toast(msg, type = "success") {
+  const id = `t${Date.now()}`;
+  const el = document.createElement("div");
+  el.id = id;
+  el.className = `alert alert-${type} shadow-sm`;
+  el.textContent = msg;
+  document.getElementById("toast-area")?.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
+
+// Render cards
 function rideCard(r) {
-  const price = typeof r.price === "number" ? r.price.toFixed(2) : r.price;
   return `
   <div class="card mb-2 shadow-sm">
     <div class="card-body d-flex flex-wrap justify-content-between">
@@ -33,8 +62,8 @@ function rideCard(r) {
         </div>
       </div>
       <div class="text-end">
-        <div class="fw-bold">${price} €</div>
-        <div class="small">${r.status}</div>
+        <div class="fw-bold">${fmtPrice(r.price)}</div>
+        <div class="small">${r.status ?? "-"}</div>
         <a class="btn btn-link btn-sm p-0 mt-1" href="/ride?id=${r.id}" data-link>Voir le détail</a>
       </div>
     </div>
@@ -63,13 +92,16 @@ function bindUnbook() {
     btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.id);
       const old = btn.textContent;
+      if (!confirm("Confirmer l'annulation de votre réservation ?")) return;
+
       btn.disabled = true; btn.textContent = "…";
       try {
         await unbookRide(id);
+        toast("Réservation annulée");
         await render();
       } catch (e) {
         console.error(e);
-        alert("Échec de l'annulation");
+        toast("Échec de l'annulation", "danger");
       } finally {
         btn.disabled = false; btn.textContent = old;
       }
@@ -78,11 +110,19 @@ function bindUnbook() {
 }
 
 async function render() {
+  // Init
   $bFeedback.textContent = "Chargement…";
   $rFeedback.textContent = "Chargement…";
+  $bEmpty.classList.add("d-none");
+  $rEmpty.classList.add("d-none");
   $bList.innerHTML = "";
   $rList.innerHTML = "";
+  $badgeBookings.textContent = "0";
+  $badgeRides.textContent = "0";
+  $badgeUpcoming.textContent = "À venir: 0";
+  $badgePast.textContent = "Passées: 0";
 
+  // Auth
   const info = await me().catch(() => ({ auth: false }));
   if (!info?.auth) {
     $welcome.innerHTML = `<div class="alert alert-warning">Veuillez vous connecter pour accéder à votre profil.</div>`;
@@ -97,9 +137,19 @@ async function render() {
   try {
     const data = await fetchMyBookings();
     const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
+    $badgeBookings.textContent = String(bookings.length);
+
     if (!bookings.length) {
-      $bFeedback.textContent = "Aucune réservation.";
+      $bEmpty.classList.remove("d-none");
+      $bFeedback.textContent = "";
     } else {
+      // Split à venir / passées (juste pour les badges)
+      const upcoming = bookings.filter(b => !isPast(b.startAt));
+      const past     = bookings.filter(b =>  isPast(b.startAt));
+      $badgeUpcoming.textContent = `À venir: ${upcoming.length}`;
+      $badgePast.textContent     = `Passées: ${past.length}`;
+
+      // Affichage (on garde l’ordre d’origine)
       $bFeedback.textContent = "";
       $bList.innerHTML = bookings.map(bookingRow).join("");
       bindUnbook();
@@ -112,10 +162,13 @@ async function render() {
   // Trajets conducteur
   try {
     const res = await fetch(`${API}/me/rides`, { credentials: "include", headers: { Accept: "application/json" }});
-    if (!res.ok) throw new Error("HTTP "+res.status);
-    const rides = await res.json();
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const rides = await res.json(); // tableau
+    $badgeRides.textContent = String(Array.isArray(rides) ? rides.length : 0);
+
     if (!Array.isArray(rides) || !rides.length) {
-      $rFeedback.textContent = "Aucun trajet en tant que conducteur.";
+      $rEmpty.classList.remove("d-none");
+      $rFeedback.textContent = "";
     } else {
       $rFeedback.textContent = "";
       $rList.innerHTML = rides.map(rideCard).join("");
@@ -126,6 +179,7 @@ async function render() {
   }
 }
 
+// Logout
 $btnLogout?.addEventListener("click", async () => {
   try {
     await logout();
@@ -135,6 +189,7 @@ $btnLogout?.addEventListener("click", async () => {
     else window.location.href = "/signin";
   } catch (e) {
     console.error(e);
+    toast("Échec de la déconnexion", "danger");
   }
 });
 

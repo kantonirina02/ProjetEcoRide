@@ -9,12 +9,42 @@
   </div>
 
   <div id="account-welcome" class="mb-4"></div>
+  <ul class="nav nav-tabs" id="account-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-bookings" data-bs-toggle="tab" data-bs-target="#pane-bookings" type="button" role="tab">
+        Mes réservations <span class="badge text-bg-secondary" id="badge-bookings">0</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-rides" data-bs-toggle="tab" data-bs-target="#pane-rides" type="button" role="tab">
+        Mes trajets (conducteur) <span class="badge text-bg-secondary" id="badge-rides">0</span>
+      </button>
+    </li>
+  </ul>
 
-  <h3 class="h5 mt-4">Mes réservations</h3>
-  <div id="account-bookings-feedback" class="text-muted mb-2">Chargement…</div>
-  <div id="account-bookings-list"></div>
+  <div class="tab-content border-start border-end border-bottom p-3 rounded-bottom">
+    <div class="tab-pane fade show active" id="pane-bookings" role="tabpanel" aria-labelledby="tab-bookings">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3 class="h6 m-0">Réservations</h3>
+        <div class="small text-muted" id="account-bookings-feedback">Chargement…</div>
+      </div>
+      <div class="mb-2">
+        <span class="badge text-bg-success" id="badge-upcoming">À venir: 0</span>
+        <span class="badge text-bg-secondary" id="badge-past" style="margin-left:.5rem;">Passées: 0</span>
+      </div>
+      <div id="account-bookings-empty" class="alert alert-light d-none">Aucune réservation.</div>
+      <div id="account-bookings-list" class="mt-2"></div>
+    </div>
 
-  <h3 class="h5 mt-4">Mes trajets (conducteur)</h3>
-  <div id="account-rides-feedback" class="text-muted mb-2">Chargement…</div>
-  <div id="account-rides-list"></div>
+    <div class="tab-pane fade" id="pane-rides" role="tabpanel" aria-labelledby="tab-rides">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3 class="h6 m-0">Trajets (conducteur)</h3>
+        <div class="small text-muted" id="account-rides-feedback">Chargement…</div>
+      </div>
+      <div id="account-rides-empty" class="alert alert-light d-none">Aucun trajet en tant que conducteur.</div>
+      <div id="account-rides-list" class="mt-2"></div>
+    </div>
+  </div>
+
+  <div id="toast-area" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080;"></div>
 </section>
