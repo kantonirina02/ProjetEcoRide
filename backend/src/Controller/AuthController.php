@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\CreditLedger;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -49,7 +50,7 @@ class AuthController extends AbstractController
         $password = (string)($data['password'] ?? '');
 
         if ($email === '' || $password === '') {
-            return $this->json(['error' => 'email et password requis'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'email et mot de passe requis'], Response::HTTP_BAD_REQUEST);
         }
 
         /** @var User|null $user */
@@ -132,26 +133,36 @@ class AuthController extends AbstractController
         $pseudo = trim((string)($data['pseudo'] ?? ''));
 
         if ($email === '' || $pass === '') {
-            return $this->json(['error' => 'email et password requis'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'email et mot de passe requis'], Response::HTTP_BAD_REQUEST);
         }
         if (!$this->isValidEmail($email)) {
             return $this->json(['error' => 'email invalide'], Response::HTTP_BAD_REQUEST);
         }
         if (!$this->isStrongPassword($pass)) {
-            return $this->json(['error' => 'mot de passe faible (≥8, 1Aa, 1 chiffre, 1 spécial)'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'mot de passe trop faible (minimum 8 caracteres, 1 majuscule, 1 minuscule, 1 chiffre, 1 caractere special)'], Response::HTTP_BAD_REQUEST);
         }
         if ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
-            return $this->json(['error' => 'email déjà utilisé'], Response::HTTP_CONFLICT);
+            return $this->json(['error' => 'email deja utilise'], Response::HTTP_CONFLICT);
         }
+
+        $signupBonus = 20;
 
         $user = (new User())
             ->setEmail($email)
             ->setPassword(password_hash($pass, PASSWORD_BCRYPT))
             ->setPseudo($pseudo !== '' ? $pseudo : explode('@', $email)[0])
             ->setRoles(['ROLE_USER'])
-            ->setCreatedAt(new \DateTimeImmutable());
+            ->setCreatedAt(new \DateTimeImmutable())
+            ->setCreditsBalance($signupBonus);
+
+        $ledger = (new CreditLedger())
+            ->setUser($user)
+            ->setDelta($signupBonus)
+            ->setSource('signup_bonus')
+            ->setRide(null);
 
         $em->persist($user);
+        $em->persist($ledger);
         $em->flush();
 
         // connexion auto

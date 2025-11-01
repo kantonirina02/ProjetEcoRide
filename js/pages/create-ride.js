@@ -1,107 +1,228 @@
-import { createRide } from "../api.js";
+import { createRide, fetchMyVehicles, me, API_BASE } from "../api.js";
 import { getSession } from "../auth/session.js";
+
+const PLATFORM_FEE = 2;
+const FRONT_BASE = (() => {
+  const origin = window.location.origin;
+  if (origin.includes(":8001")) {
+    return origin.replace(":8001", ":3000");
+  }
+  return origin;
+})();
+
+function redirectToSignin() {
+  if (typeof window.navigate === "function") {
+    window.navigate("/signin");
+  } else {
+    window.location.href = `${FRONT_BASE}/signin`;
+  }
+}
+
 
 const $form = document.getElementById("createRideForm");
 const $err = document.getElementById("cr-error");
-const $ok  = document.getElementById("cr-success");
+const $ok = document.getElementById("cr-success");
 const $btn = document.getElementById("cr-submit");
+const $vehicleSelect = document.getElementById("cr-vehicleId");
+const $newVehicleGroups = document.querySelectorAll("[data-new-vehicle]");
+const $newVehicleInputs = document.querySelectorAll("[data-vehicle-input]");
 
 function showErr(msg) {
+  if (!$err || !$ok) return;
   $err.textContent = msg || "Erreur";
   $err.classList.remove("d-none");
   $ok.classList.add("d-none");
 }
+
 function showOk(msg) {
-  $ok.textContent = msg || "Trajet créé";
+  if (!$err || !$ok) return;
+  $ok.textContent = msg || "Trajet cree";
   $ok.classList.remove("d-none");
   $err.classList.add("d-none");
 }
 
 function val($el, trim = true) {
+  if (!$el) return "";
   return trim ? $el.value.trim() : $el.value;
 }
 
-async function onSubmit(e) {
-  if (e && typeof e.preventDefault === "function") e.preventDefault();
+function toggleVehicleFields() {
+  const useExisting = Boolean($vehicleSelect && $vehicleSelect.value);
+  $newVehicleGroups.forEach((group) => {
+    group.classList.toggle("d-none", useExisting);
+  });
+  $newVehicleInputs.forEach((input) => {
+    input.disabled = useExisting;
+  });
+}
+
+async function loadVehicles() {
+  if (!$vehicleSelect) return;
+  try {
+    const res = await fetchMyVehicles();
+    if (!res?.auth || !Array.isArray(res.vehicles)) return;
+    res.vehicles.forEach((vehicle) => {
+      const option = document.createElement("option");
+      option.value = String(vehicle.id);
+      const label = vehicle.label && vehicle.label.trim() !== "" ? vehicle.label.trim() : `Vehicule #${vehicle.id}`;
+      const seats = vehicle.seatsTotal != null ? `${vehicle.seatsTotal} places` : "places inconnues";
+      option.textContent = `${label} (${seats})`;
+      $vehicleSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error("fetchMyVehicles failed", error);
+  }
+}
+
+let oldLabel = "";
+
+async function ensureAuth() {
+  try {
+    const info = await me();
+    if (!info?.auth) {
+      showErr("Session expiree. Veuillez vous reconnecter.");
+      setTimeout(() => {
+        redirectToSignin();
+      }, 400);
+      return false;
+    }
+    if (!window.__session || !window.__session.user) {
+      window.__session = { user: info.user };
+    }
+    return true;
+  } catch (error) {
+    console.error("ensureAuth failed", error);
+    showErr("Impossible de verifier la session. Reconnectez-vous.");
+    setTimeout(() => {
+      redirectToSignin();
+    }, 400);
+    return false;
+  }
+}
+
+async function onSubmit(event) {
+  if (event && typeof event.preventDefault === "function") event.preventDefault();
+
+  if (!(await ensureAuth())) return;
 
   const session = getSession();
   if (!session || !session.user) {
     showErr("Veuillez vous connecter.");
-    if (typeof window.navigate === "function") window.navigate("/signin");
-    else window.location.href = "/signin";
+    redirectToSignin();
     return;
   }
 
+  const priceInput = Number(val(document.getElementById("cr-price")));
+  if (!Number.isFinite(priceInput) || priceInput <= PLATFORM_FEE) {
+    showErr(`Le prix doit etre strictement superieur a ${PLATFORM_FEE} credits.`);
+    return;
+  }
+
+  const selectedVehicleId = $vehicleSelect && $vehicleSelect.value ? Number($vehicleSelect.value) : null;
+
   const payload = {
     driverId: session.user.id,
-    vehicle: {
-      brand:  val(document.getElementById("cr-brand")),
-      model:  val(document.getElementById("cr-model")),
-      eco:    document.getElementById("cr-eco").checked,
-      seatsTotal: Number(val(document.getElementById("cr-seats")) || 4),
-      color:  val(document.getElementById("cr-color")),
-      energy: val(document.getElementById("cr-energy"), false),
-    },
     fromCity: val(document.getElementById("cr-fromCity")),
-    toCity:   val(document.getElementById("cr-toCity")),
-    startAt:  val(document.getElementById("cr-startAt")),
-    endAt:    val(document.getElementById("cr-endAt")),
-    price:    Number(val(document.getElementById("cr-price"))),
-    allowSmoker:  document.getElementById("cr-allowSmoker").checked,
-    allowAnimals: document.getElementById("cr-allowAnimals").checked,
-    musicStyle:   val(document.getElementById("cr-music")),
+    toCity: val(document.getElementById("cr-toCity")),
+    startAt: val(document.getElementById("cr-startAt")),
+    endAt: val(document.getElementById("cr-endAt")),
+    price: priceInput,
+    allowSmoker: Boolean(document.getElementById("cr-allowSmoker")?.checked),
+    allowAnimals: Boolean(document.getElementById("cr-allowAnimals")?.checked),
+    musicStyle: val(document.getElementById("cr-music")),
   };
 
-  // sanitation: datetime-local -> "YYYY-MM-DD HH:mm"
-  payload.startAt = payload.startAt.replace("T", " ");
-  payload.endAt   = payload.endAt.replace("T", " ");
+  if (selectedVehicleId) {
+    payload.vehicleId = selectedVehicleId;
+  } else {
+    payload.vehicle = {
+      brand: val(document.getElementById("cr-brand")),
+      model: val(document.getElementById("cr-model")),
+      eco: Boolean(document.getElementById("cr-eco")?.checked),
+      seatsTotal: Number(val(document.getElementById("cr-seats")) || 4),
+      color: val(document.getElementById("cr-color")),
+      energy: val(document.getElementById("cr-energy"), false),
+    };
+  }
 
-  const old = $btn.textContent;
-  $btn.disabled = true;
-  $btn.textContent = "…";
+  payload.startAt = payload.startAt.replace("T", " ");
+  payload.endAt = payload.endAt.replace("T", " ");
+
+  if ($btn) {
+    oldLabel = $btn.textContent;
+    $btn.disabled = true;
+    $btn.textContent = "...";
+  }
 
   try {
     const res = await createRide(payload);
-    showOk(`Trajet #${res.id} créé ✔`);
-    const q = new URLSearchParams({ from: payload.fromCity, to: payload.toCity, date: payload.startAt.slice(0,10) });
+    showOk(`Trajet #${res.id} cree`);
+    const searchParams = new URLSearchParams({
+      from: payload.fromCity,
+      to: payload.toCity,
+      date: payload.startAt.slice(0, 10),
+    });
     setTimeout(() => {
-      if (typeof window.navigate === "function") window.navigate(`/covoiturages?${q.toString()}`);
-      else window.location.href = `/covoiturages?${q.toString()}`;
+      if (typeof window.navigate === "function") window.navigate(`/covoiturages?${searchParams.toString()}`);
+      else window.location.href = `/covoiturages?${searchParams.toString()}`;
     }, 600);
-  } catch (e) {
-    console.error(e);
-    const msg = String(e?.message || "");
-    if (msg.includes("HTTP 400")) {
-      showErr("Création impossible. Vérifie les champs (marque, modèle, villes, dates, prix...).");
-    } else if (msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION")) {
-      showErr("Serveur API indisponible (port 8001). Lance le backend Symfony puis réessaie.");
+  } catch (error) {
+    console.error(error);
+    const message = String(error?.message || "");
+    if (message.includes("HTTP 401")) {
+      showErr("Session expiree. Veuillez vous reconnecter.");
+      setTimeout(() => {
+        redirectToSignin();
+      }, 400);
+    } else if (message.includes("HTTP 400")) {
+      showErr("Creation impossible. Verifiez les champs (vehicule, villes, dates, prix...).");
+    } else if (message.includes("Failed to fetch") || message.includes("ERR_CONNECTION")) {
+      showErr("Serveur API indisponible (port 8001). Lancez le backend puis reessayez.");
     } else {
-      showErr("Création impossible. Réessaie plus tard.");
+      showErr("Creation impossible. Reessayez plus tard.");
     }
   } finally {
-    $btn.disabled = false;
-    $btn.textContent = old;
+    if ($btn) {
+      $btn.disabled = false;
+      $btn.textContent = oldLabel;
+    }
   }
 }
 
-// Empêche le refresh et capture le submit
+if ($vehicleSelect) {
+  $vehicleSelect.addEventListener("change", toggleVehicleFields);
+}
+
 if ($form) {
   $form.addEventListener("submit", onSubmit);
 }
 
-// Fallback: capte un clic direct sur le bouton si le submit est bloqué
 if ($btn) {
-  $btn.addEventListener("click", (e) => onSubmit(e));
+  $btn.addEventListener("click", onSubmit);
 }
 
-// Ping API pour indiquer l’état et éviter des essais inutiles
+(async function init() {
+  const authOk = await ensureAuth();
+  toggleVehicleFields();
+  if (authOk) {
+    loadVehicles();
+  }
+})();
+
 (async function pingApi() {
   try {
-    const res = await fetch("http://localhost:8001/api/health", { credentials: "include" });
+        const healthUrl = API_BASE.replace(/\/api$/, "/api/health");
+    const res = await fetch(healthUrl, { credentials: "include" });
     if (!res.ok) throw new Error("bad");
     $btn?.removeAttribute("disabled");
   } catch {
     $btn?.setAttribute("disabled", "disabled");
-    showErr("Serveur API indisponible (port 8001). Lance le backend Symfony puis réessaie.");
+    showErr("Serveur API indisponible (port 8001). Lancez le backend puis reessayez.");
   }
 })();
+
+
+
+
+
+
