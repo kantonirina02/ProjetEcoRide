@@ -13,7 +13,7 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route('/api/auth', name: 'api_auth_')]
 class AuthController extends AbstractController
 {
-    /* ---------------- Utils de validation ---------------- */
+    /* -- Utils de validation -- */
 
     private function isValidEmail(string $email): bool
     {
@@ -30,11 +30,10 @@ class AuthController extends AbstractController
         return $hasLower && $hasUpper && $hasDigit && $hasSpec;
     }
 
-    /* --------------------------- LOGIN --------------------------- */
+    /* -- LOGIN -- */
 
     /**
      * POST /api/auth/login
-     * Body: {"email":"...","password":"..."}
      */
     #[Route('/login', name: 'login', methods: ['POST'])]
     public function login(Request $request, EntityManagerInterface $em): JsonResponse
@@ -82,8 +81,7 @@ class AuthController extends AbstractController
             ],
         ]);
     }
-
-    /* ----------------------------- ME ---------------------------- */
+    /* -- ME / CHECK AUTH -- */
 
     /** GET /api/auth/me */
     #[Route('/me', name: 'me', methods: ['GET'])]
@@ -102,7 +100,7 @@ class AuthController extends AbstractController
         ]);
     }
 
-    /* --------------------------- LOGOUT -------------------------- */
+    /* -- LOGOUT -- */
 
     /** POST /api/auth/logout */
     #[Route('/logout', name: 'logout', methods: ['POST'])]
@@ -112,7 +110,7 @@ class AuthController extends AbstractController
         return $this->json(['ok' => true]);
     }
 
-    /* --------------------- SIGNUP / REGISTER --------------------- */
+    /* -- SIGNUP / REGISTER -- */
 
     /**
      * POST /api/auth/signup    (alias historique)
@@ -170,5 +168,25 @@ class AuthController extends AbstractController
                 'pseudo' => $user->getPseudo(),
             ],
         ], Response::HTTP_CREATED);
+    }
+
+    /* -- CHECK EMAIL -- */
+
+    /**
+     * GET /api/auth/check-email?email=...
+     */
+    #[Route('/check-email', name: 'check_email', methods: ['GET'])]
+    public function checkEmail(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $email = strtolower(trim((string) $request->query->get('email', '')));
+        if ($email === '' || !$this->isValidEmail($email)) {
+            return $this->json(['ok' => false, 'error' => 'email invalide'], Response::HTTP_BAD_REQUEST);
+        }
+        $exists = (bool) $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        return $this->json([
+            'ok'        => true,
+            'email'     => $email,
+            'available' => !$exists,
+        ]);
     }
 }

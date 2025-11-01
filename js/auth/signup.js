@@ -8,12 +8,19 @@ const $btn  = document.getElementById("btn-validation-inscription");
 const $err = document.getElementById("signup-error");
 const $ok  = document.getElementById("signup-success");
 
+const $email = document.getElementById("EmailInput");
+const $emailHint = document.getElementById("EmailHint");
+
 function showErr(msg){ $err.textContent = msg; $err.classList.remove("d-none"); $ok.classList.add("d-none"); }
 function showOk(msg){ $ok.textContent = msg; $ok.classList.remove("d-none"); $err.classList.add("d-none"); }
 
 function strongPass(p){
   if (!p || p.length < 8) return false;
   return /[a-z]/.test(p) && /[A-Z]/.test(p) && /\d/.test(p) && /[^A-Za-z0-9]/.test(p);
+}
+
+function debounce(fn, delay=400){
+  let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), delay); };
 }
 
 async function signup(payload){
@@ -32,11 +39,56 @@ async function signup(payload){
   return body;
 }
 
+/* -- check e-mail availability -- */
+let emailAvailable = null; 
+
+async function checkEmailAvailability(email){
+  emailAvailable = null;
+  if (!$emailHint) return;
+  $email.classList.remove("is-valid","is-invalid");
+  $emailHint.classList.remove("text-success","text-danger");
+  $emailHint.textContent = "";
+
+  const fmtOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!fmtOk) {
+    if (email.length > 0) {
+      $email.classList.add("is-invalid");
+      $emailHint.classList.add("text-danger");
+      $emailHint.textContent = "Format d’e-mail invalide.";
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/auth/check-email?email=${encodeURIComponent(email)}`, {
+      headers: { Accept: "application/json" },
+      credentials: "include",
+    });
+    const body = await res.json().catch(()=>({}));
+    if (!res.ok || body?.ok !== true) throw new Error("check failed");
+
+    emailAvailable = !!body.available;
+    if (emailAvailable) {
+      $email.classList.add("is-valid");
+      $emailHint.classList.add("text-success");
+      $emailHint.textContent = "Adresse disponible ✅";
+    } else {
+      $email.classList.add("is-invalid");
+      $emailHint.classList.add("text-danger");
+      $emailHint.textContent = "Adresse déjà utilisée ❌";
+    }
+  } catch {
+    emailAvailable = null;
+  }
+}
+
+const debouncedCheck = debounce((v)=>checkEmailAvailability(v), 350);
+$email?.addEventListener("input", (e)=> debouncedCheck(e.target.value.trim().toLowerCase()));
 async function onSubmit(e){
   e.preventDefault();
 
   const pseudo = document.getElementById("PseudoInput").value.trim();
-  const email  = document.getElementById("EmailInput").value.trim();
+  const email  = $email.value.trim().toLowerCase();
   const pass   = document.getElementById("PasswordInput").value;
   const pass2  = document.getElementById("ValidatePasswordInput").value;
 
@@ -44,7 +96,6 @@ async function onSubmit(e){
     showErr("Email et mot de passe requis.");
     return;
   }
-  // Email HTML5 + vérif simple JS
   const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   if (!okEmail){
     showErr("Votre email est invalide.");
@@ -59,6 +110,14 @@ async function onSubmit(e){
     return;
   }
 
+  if (emailAvailable === null) {
+    await checkEmailAvailability(email);
+  }
+  if (emailAvailable === false) {
+    showErr("Cet email est déjà utilisé.");
+    return;
+  }
+
   const payload = { email, password: pass, pseudo };
 
   const old = $btn.textContent;
@@ -69,7 +128,6 @@ async function onSubmit(e){
     await signup(payload);
     showOk("Compte créé ✔");
 
-    // synchronise la session FE
     try {
       const info = await me();
       window.__session = { user: info.user };
