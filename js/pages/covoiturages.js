@@ -13,7 +13,6 @@ const $feedback = document.getElementById("results-feedback");
 const $eco   = document.getElementById("ecoFilter");
 const $pmax  = document.getElementById("priceFilter");
 const $dmax  = document.getElementById("durationFilter");
-// rating non supporté côté API (on l’ignore proprement)
 const $rmin  = document.getElementById("ratingFilter");
 
 // --- Utilitaires
@@ -184,3 +183,23 @@ if ($form) {
     render();
   }
 }
+
+// Affiche la section filtres
+function showFilters() {
+  const wrap = document.getElementById("filter-section-wrapper");
+  if (wrap) wrap.classList.remove("d-none");
+}
+    showFilters();
+
+// Bouton "Réinitialiser" des filtres
+document.getElementById("resetFilters")?.addEventListener("click", () => {
+  const eco = document.getElementById("ecoFilter");
+  const p   = document.getElementById("priceFilter");
+  const d   = document.getElementById("durationFilter");
+  const r   = document.getElementById("ratingFilter");
+  if (eco) eco.checked = false;
+  if (p)   p.value = "";
+  if (d)   d.value = "";
+  if (r)   r.value = "";
+  if (typeof render === "function") render();
+});
