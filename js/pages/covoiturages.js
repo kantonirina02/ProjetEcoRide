@@ -64,13 +64,13 @@ function cardTemplate(ride, state) {
 
   let actionHtml = "";
   if (isDriver) {
-    actionHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous etes le conducteur</button>`;
+    actionHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous êtes le conducteur</button>`;
   } else if (alreadyBooked) {
-    actionHtml = `<button class="btn btn-success btn-sm" disabled>Reserve</button>`;
+    actionHtml = `<button class="btn btn-success btn-sm" disabled>Réservé</button>`;
   } else if (soldOut) {
     actionHtml = `<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>`;
   } else {
-    actionHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${ride.id}">Reserver</button>`;
+    actionHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${ride.id}">Réserver</button>`;
   }
 
   const vehicle = ride.vehicle || {};
@@ -89,7 +89,7 @@ function cardTemplate(ride, state) {
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div>
                 <div class="fw-semibold">${ride.from} &rarr; ${ride.to}</div>
-                <div class="small text-muted">${ride.startAt ?? ""} · ${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places · ${vehicle.brand ?? ""} ${vehicle.model ?? ""}${vehicle.eco ? " · Trajet eco" : ""}</div>
+                <div class="small text-muted">${ride.startAt ?? ""} · ${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places · ${vehicle.brand ?? ""} ${vehicle.model ?? ""}${vehicle.eco ? " · Trajet éco" : ""}</div>
                 ${ratingHtml ? `<div class="mt-1">${ratingHtml}</div>` : ""}
               </div>
               <div class="text-end">
@@ -100,7 +100,7 @@ function cardTemplate(ride, state) {
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
               <div class="text-muted small">Conducteur : <strong>${driver.pseudo ?? "Inconnu"}</strong></div>
               <div class="d-flex gap-2">
-                <a class="btn btn-light btn-sm" href="/ride?id=${ride.id}" data-link>Voir le detail</a>
+                <a class="btn btn-light btn-sm" href="/ride?id=${ride.id}" data-link>Voir le détail</a>
                 ${actionHtml}
               </div>
             </div>
@@ -113,13 +113,13 @@ function cardTemplate(ride, state) {
 
 function renderSuggestion(suggestion) {
   if (!suggestion) {
-    $feedback.textContent = "Aucun resultat.";
+    $feedback.textContent = "Aucun résultat.";
     return;
   }
   const formattedDate = suggestion.startAt ? suggestion.startAt.replace(" ", " · ") : suggestion.date;
   $feedback.innerHTML = `
     <div class="alert alert-warning" role="alert">
-      Aucun trajet ne correspond exactement a votre recherche. Prochain trajet disponible :
+      Aucun trajet ne correspond exactement à votre recherche. Prochain trajet disponible :
       <strong>${suggestion.from} &rarr; ${suggestion.to}</strong> le <strong>${formattedDate ?? "date inconnue"}</strong>.
       <button class="btn btn-sm btn-outline-primary ms-2" id="applySuggestion">Utiliser cette date</button>
     </div>
@@ -192,7 +192,7 @@ function bindBookButtons() {
     btn.addEventListener("click", async () => {
       const session = getSession();
       if (!session || !session.user) {
-        alert("Connecte-toi d'abord pour reserver.");
+        alert("Connecte-toi d'abord pour réserver.");
         navigate("/signin");
         return;
       }
@@ -211,7 +211,7 @@ function bindBookButtons() {
         }
       } catch (error) {
         console.error(error);
-        alert("Echec de la reservation");
+        alert("Échec de la réservation");
       } finally {
         btn.disabled = false;
         btn.textContent = old;
@@ -251,4 +251,3 @@ if (resetBtn) {
     render();
   });
 }
-
