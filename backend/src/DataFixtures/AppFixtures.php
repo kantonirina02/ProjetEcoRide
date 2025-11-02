@@ -20,21 +20,24 @@ class AppFixtures extends Fixture
         $u = (new User())
             ->setEmail('user1@mail.test')
             ->setPseudo('ecoDriver')
-            ->setRoles(['ROLE_USER']);
+            ->setRoles(['ROLE_USER'])
+            ->setCreditsBalance(100);
         $u->setPassword($this->hasher->hashPassword($u, 'Passw0rd!'));
         $em->persist($u);
 
         $employee = (new User())
             ->setEmail('employee@mail.test')
             ->setPseudo('EcoEmploye')
-            ->setRoles(['ROLE_USER', 'ROLE_EMPLOYEE']);
+            ->setRoles(['ROLE_USER', 'ROLE_EMPLOYEE'])
+            ->setCreditsBalance(100);
         $employee->setPassword($this->hasher->hashPassword($employee, 'Passw0rd!'));
         $em->persist($employee);
 
         $admin = (new User())
             ->setEmail('admin@mail.test')
             ->setPseudo('EcoAdmin')
-            ->setRoles(['ROLE_USER', 'ROLE_ADMIN']);
+            ->setRoles(['ROLE_USER', 'ROLE_ADMIN'])
+            ->setCreditsBalance(100);
         $admin->setPassword($this->hasher->hashPassword($admin, 'Passw0rd!'));
         $em->persist($admin);
 
