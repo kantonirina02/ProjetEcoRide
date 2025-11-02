@@ -11,13 +11,18 @@ use App\Entity\Vehicle;
 use App\Repository\ReviewRepository;
 use App\Repository\RideRepository;
 use App\Service\SearchLogger;
+use DateTimeImmutable;
+use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Exception;
+use JsonException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Throwable;
 
 #[Route('/api', name: 'api_')]
 class RideController extends AbstractController
@@ -30,7 +35,7 @@ class RideController extends AbstractController
         return $this->json([
             'status'  => 'ok',
             'version' => 'v1',
-            'time'    => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'time'    => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
         ]);
     }
 
@@ -48,7 +53,13 @@ class RideController extends AbstractController
     }
 
     /**
-     * Liste des trajets avec filtres (from, to, date, eco, priceMax, durationMax SQL, ratingMin côté PHP)
+     * Liste des trajets avec filtres :
+     * - from, to (égalité insensible à la casse)
+     * - date (jour)
+     * - eco (bool)
+     * - priceMax (<=)
+     * - durationMax (minutes, côté SQL via TIMESTAMPDIFF)
+     * - ratingMin (filtré côté PHP sur la moyenne des avis)
      */
     #[Route('/rides', name: 'rides_list', methods: ['GET'])]
     public function list(
@@ -80,12 +91,12 @@ class RideController extends AbstractController
         }
         if ($date) {
             try {
-                $start = new \DateTimeImmutable($date . ' 00:00:00');
-                $end   = new \DateTimeImmutable($date . ' 23:59:59');
+                $start = new DateTimeImmutable($date . ' 00:00:00');
+                $end   = new DateTimeImmutable($date . ' 23:59:59');
                 $qb->andWhere('r.startAt BETWEEN :s AND :e')
-                    ->setParameter('s', $start)
-                    ->setParameter('e', $end);
-            } catch (\Exception) {
+                   ->setParameter('s', $start)
+                   ->setParameter('e', $end);
+            } catch (Exception) {
                 return $this->json(['error' => 'Invalid date format, expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
             }
         }
@@ -93,11 +104,11 @@ class RideController extends AbstractController
             $qb->andWhere('v.eco = :eco')->setParameter('eco', (bool)((int)$eco));
         }
         if ($priceMax !== null && $priceMax !== '') {
-            // DECIMAL => passer en string
+            // price est DECIMAL en BDD, passer la valeur en string côté DQL
             $qb->andWhere('r.price <= :pmax')->setParameter('pmax', (string)$priceMax);
         }
         if ($durationMax !== null && $durationMax !== '') {
-            // MySQL/MariaDB
+            // MySQL/MariaDB : TIMESTAMPDIFF(MINUTE, startAt, endAt) <= :durationMax
             $qb->andWhere('r.endAt IS NOT NULL');
             $qb->andWhere("FUNCTION('TIMESTAMPDIFF', 'MINUTE', r.startAt, r.endAt) <= :durationMax")
                ->setParameter('durationMax', (int)$durationMax);
@@ -106,7 +117,7 @@ class RideController extends AbstractController
         /** @var Ride[] $rides */
         $rides = $qb->getQuery()->getResult();
 
-        // Prépare la map des notes chauffeurs
+        // Prépare la map (driverId => [avg, count]) pour les notes
         $driverIds = [];
         foreach ($rides as $ride) {
             $driver = $ride->getDriver();
@@ -133,7 +144,7 @@ class RideController extends AbstractController
             }
         }
 
-        // Filtre rating côté PHP (avec fallback pour conducteurs sans note)
+        // Filtre rating côté PHP (avec fallback permissif si pas d'avis)
         if ($ratingMin !== null && $ratingMin !== '') {
             $minRating = (float)$ratingMin;
             $rides = array_values(array_filter($rides, static function (Ride $ride) use ($ratingMap, $minRating) {
@@ -153,7 +164,7 @@ class RideController extends AbstractController
             }));
         }
 
-        // Construction de la payload front
+        // Payload pour le front
         $data = array_map(function (Ride $r) use ($ratingMap): array {
             $vehicle  = $r->getVehicle();
             $brand    = $vehicle?->getBrand();
@@ -187,7 +198,7 @@ class RideController extends AbstractController
             ];
         }, $rides);
 
-        // Suggestion de date proche si aucun résultat
+        // Suggestion (prochaine date dispo) si aucun résultat
         $suggestion = null;
         if (!$data && $from && $to) {
             $suggestQb = $repo->createQueryBuilder('r')
@@ -199,14 +210,14 @@ class RideController extends AbstractController
 
             if ($date) {
                 try {
-                    $searchDate = new \DateTimeImmutable($date);
+                    $searchDate = new DateTimeImmutable($date);
                     $suggestQb->andWhere('r.startAt >= :searchDate')
                               ->setParameter('searchDate', $searchDate);
-                } catch (\Exception) {
+                } catch (Exception) {
                     // ignore date invalide
                 }
             } else {
-                $suggestQb->andWhere('r.startAt >= :now')->setParameter('now', new \DateTimeImmutable('now'));
+                $suggestQb->andWhere('r.startAt >= :now')->setParameter('now', new DateTimeImmutable('now'));
             }
 
             $closest = $suggestQb->getQuery()->getOneOrNullResult();
@@ -221,9 +232,15 @@ class RideController extends AbstractController
             }
         }
 
-        // --- LOG MongoDB (non bloquant) ---
-        $sessionUserId = (int)($req->getSession()->get('user_id') ?? 0) ?: null;
-        $searchLogger->log($from, $to, $date, is_countable($data) ? count($data) : 0, $sessionUserId);
+        // Log MongoDB (non bloquant)
+        $sessionUserId = (int)($req->getSession()->get('user_id') ?? 0);
+        $searchLogger->log(
+            (string)($from ?? ''),
+            (string)($to ?? ''),
+            (string)($date ?? ''),
+            is_countable($data) ? count($data) : 0,
+            $sessionUserId > 0 ? (string)$sessionUserId : null
+        );
 
         return $this->json([
             'rides'      => $data,
@@ -256,13 +273,13 @@ class RideController extends AbstractController
             return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
         }
 
-        // interdire au conducteur de réserver son propre trajet
+        // Interdire au conducteur de réserver son propre trajet
         if ($ride->getDriver() && $ride->getDriver()->getId() === $userId) {
             return $this->json(['error' => 'Driver cannot book own ride'], Response::HTTP_CONFLICT);
         }
 
-        // interdire si trajet déjà commencé/passé
-        $now = new \DateTimeImmutable('now');
+        // Interdire si le trajet est passé / déjà commencé
+        $now = new DateTimeImmutable('now');
         if ($ride->getStartAt() && $ride->getStartAt() < $now) {
             return $this->json(['error' => 'Ride already started or past'], Response::HTTP_CONFLICT);
         }
@@ -272,7 +289,7 @@ class RideController extends AbstractController
         if ($raw !== '') {
             try {
                 $payload = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
+            } catch (JsonException) {
                 return $this->json(['error' => 'Invalid JSON body'], Response::HTTP_BAD_REQUEST);
             }
         }
@@ -329,10 +346,10 @@ class RideController extends AbstractController
         if (!$confirm) {
             return $this->json([
                 'requiresConfirmation' => true,
-                'rideId'          => $ride->getId(),
-                'seats'           => $seats,
-                'costCredits'     => $costCredits,
-                'availableCredits'=> $availableCredits,
+                'rideId'           => $ride->getId(),
+                'seats'            => $seats,
+                'costCredits'      => $costCredits,
+                'availableCredits' => $availableCredits,
             ], Response::HTTP_ACCEPTED);
         }
 
@@ -377,7 +394,7 @@ class RideController extends AbstractController
 
             $participant = $existing ?? (new RideParticipant())->setRide($ride)->setUser($passenger);
 
-            $now = new \DateTimeImmutable();
+            $now = new DateTimeImmutable();
             $participant
                 ->setSeatsBooked($seats)
                 ->setCreditsUsed($costCredits)
@@ -418,7 +435,7 @@ class RideController extends AbstractController
                 'driverShare' => $driverShare,
                 'balance'     => $passenger->getCreditsBalance(),
             ], Response::HTTP_CREATED);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($em->getConnection()->isTransactionActive()) {
                 $em->rollback();
             }
@@ -460,7 +477,7 @@ class RideController extends AbstractController
             return $this->json(['error' => 'Booking already cancelled'], Response::HTTP_CONFLICT);
         }
 
-        if ($ride->getStartAt() && $ride->getStartAt() <= new \DateTimeImmutable('now')) {
+        if ($ride->getStartAt() && $ride->getStartAt() <= new DateTimeImmutable('now')) {
             return $this->json(['error' => 'Ride already started'], Response::HTTP_CONFLICT);
         }
 
@@ -498,7 +515,7 @@ class RideController extends AbstractController
 
             $participant
                 ->setStatus('cancelled')
-                ->setCancelledAt(new \DateTimeImmutable());
+                ->setCancelledAt(new DateTimeImmutable());
 
             $em->persist($passenger);
             $em->persist($ride);
@@ -513,7 +530,7 @@ class RideController extends AbstractController
                 'refundedCredits'    => $creditsUsed,
                 'driverShareDebited' => $driverShare,
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($em->getConnection()->isTransactionActive()) {
                 $em->rollback();
             }
@@ -632,7 +649,7 @@ class RideController extends AbstractController
     }
 
     /**
-     * Trajets d’un conducteur (public / pour page account)
+     * Trajets d’un conducteur (public / page account)
      */
     #[Route('/users/{id<\d+>}/rides', name: 'user_rides', methods: ['GET'])]
     public function userRides(int $id, EntityManagerInterface $em): JsonResponse
@@ -665,7 +682,7 @@ class RideController extends AbstractController
     }
 
     /**
-     * Réservations d’un utilisateur
+     * Réservations d’un utilisateur (public)
      */
     #[Route('/users/{id<\d+>}/bookings', name: 'user_bookings', methods: ['GET'])]
     public function userBookings(int $id, EntityManagerInterface $em): JsonResponse
@@ -700,7 +717,7 @@ class RideController extends AbstractController
 
     /**
      * POST /api/rides (création d'un trajet)
-     * Utilise un véhicule existant (vehicleId) ou crée/synchronise depuis le payload vehicle{}.
+     * Utilise un véhicule existant (vehicleId) ou crée/met à jour depuis le payload vehicle{}.
      * Débite 2 crédits (commission de publication).
      */
     #[Route('/rides', name: 'ride_create', methods: ['POST'])]
@@ -717,7 +734,7 @@ class RideController extends AbstractController
         $raw = $req->getContent() ?? '';
         try {
             $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
+        } catch (JsonException) {
             return $this->json(['error' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -778,8 +795,11 @@ class RideController extends AbstractController
                 }
 
                 $brandRepo = $em->getRepository(Brand::class);
-                $brand = $brandRepo->findOneBy(['name' => $brandName]) ?? (new Brand())->setName($brandName);
-                $em->persist($brand);
+                $brand = $brandRepo->findOneBy(['name' => $brandName]);
+                if (!$brand) {
+                    $brand = (new Brand())->setName($brandName);
+                    $em->persist($brand);
+                }
 
                 $model = trim((string)($vehInput['model'] ?? ''));
                 if ($model === '') {
@@ -794,8 +814,8 @@ class RideController extends AbstractController
                 ]);
 
                 $seatsTotal = isset($vehInput['seatsTotal']) ? max(1, (int)$vehInput['seatsTotal']) : 4;
-                $eco   = (bool)($vehInput['eco'] ?? false);
-                $color = $vehInput['color'] ?? null;
+                $eco    = (bool)($vehInput['eco'] ?? false);
+                $color  = $vehInput['color'] ?? null;
                 $energy = (string)($vehInput['energy'] ?? 'electric');
 
                 if (!$vehicle) {
@@ -807,7 +827,7 @@ class RideController extends AbstractController
                         ->setSeatsTotal($seatsTotal)
                         ->setColor($color)
                         ->setEnergy($energy)
-                        ->setFirstRegistrationAt(new \DateTimeImmutable('2019-01-01'));
+                        ->setFirstRegistrationAt(new DateTimeImmutable('2019-01-01'));
                     $em->persist($vehicle);
                 } else {
                     $vehicle
@@ -824,14 +844,14 @@ class RideController extends AbstractController
             }
 
             try {
-                $start = new \DateTimeImmutable((string)$data['startAt']);
-                $end   = new \DateTimeImmutable((string)$data['endAt']);
-            } catch (\Exception) {
+                $start = new DateTimeImmutable((string)$data['startAt']);
+                $end   = new DateTimeImmutable((string)$data['endAt']);
+            } catch (Exception) {
                 $em->rollback();
                 return $this->json(['error' => 'Format datetime invalide (attendu: Y-m-d H:i)'], Response::HTTP_BAD_REQUEST);
             }
 
-            $now = new \DateTimeImmutable('now');
+            $now = new DateTimeImmutable('now');
             if ($start < $now) {
                 $em->rollback();
                 return $this->json(['error' => 'startAt must be in the future'], Response::HTTP_BAD_REQUEST);
@@ -861,7 +881,7 @@ class RideController extends AbstractController
                 ->setAllowSmoker((bool)($data['allowSmoker'] ?? false))
                 ->setAllowAnimals((bool)($data['allowAnimals'] ?? false))
                 ->setMusicStyle($data['musicStyle'] ?? null)
-                ->setCreatedAt(new \DateTimeImmutable());
+                ->setCreatedAt(new DateTimeImmutable());
 
             // Commission plateforme (2 crédits)
             $driver->setCreditsBalance($driver->getCreditsBalance() - self::PLATFORM_FEE);
@@ -890,7 +910,7 @@ class RideController extends AbstractController
                 'status'   => $ride->getStatus(),
                 'balance'  => $driver->getCreditsBalance(),
             ], Response::HTTP_CREATED);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($em->getConnection()->isTransactionActive()) {
                 $em->rollback();
             }
@@ -899,66 +919,115 @@ class RideController extends AbstractController
     }
 
     /**
-     * Détail d’un trajet + participants
+     * Détail d’un trajet + participants + résumé des avis.
      */
     #[Route('/rides/{id<\d+>}', name: 'ride_show', methods: ['GET'])]
-    public function showRide(int $id, Request $req, EntityManagerInterface $em): JsonResponse
-    {
-        /** @var Ride|null $r */
-        $r = $em->getRepository(Ride::class)->find($id);
-        if (!$r) {
+    public function showRide(
+        int $id,
+        Request $req,
+        EntityManagerInterface $em,
+        ReviewRepository $reviewRepository
+    ): JsonResponse {
+        /** @var Ride|null $ride */
+        $ride = $em->getRepository(Ride::class)->find($id);
+        if (!$ride) {
             return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
         }
 
         $sessionUserId = (int)($req->getSession()->get('user_id') ?? 0);
-        $v = $r->getVehicle();
-        $brand = $v?->getBrand();
-        $driver = $r->getDriver();
+        $vehicle = $ride->getVehicle();
+        $brand   = $vehicle?->getBrand();
+        $driver  = $ride->getDriver();
+
+        // Résumé et liste des avis du conducteur
+        $ratingSummary = null;
+        $reviewsList = [];
+        if ($driver) {
+            $ratingSummary = $em->createQueryBuilder()
+                ->select('AVG(review.rating) AS avgRating', 'COUNT(review.id) AS reviewCount')
+                ->from('App\Entity\Review', 'review')
+                ->where('review.target = :driver')
+                ->setParameter('driver', $driver)
+                ->getQuery()
+                ->getOneOrNullResult();
+
+            $driverReviews = $reviewRepository->findBy(['target' => $driver], ['createdAt' => 'DESC']);
+            foreach ($driverReviews as $review) {
+                $author = $review->getAuthor();
+                $reviewsList[] = [
+                    'id'       => $review->getId(),
+                    'rating'   => $review->getRating(),
+                    'comment'  => $review->getComment(),
+                    'date'     => $review->getCreatedAt()?->format('Y-m-d H:i'),
+                    'rideId'   => $review->getRide()?->getId(),
+                    'author'   => $author ? $author->getPseudo() : null,
+                    'authorId' => $author?->getId(),
+                ];
+            }
+        }
+
+        // Préférences affichées dans la fiche
+        $preferences = [
+            'allowSmoker'  => (bool)($ride->isAllowSmoker() ?? false),
+            'allowAnimals' => (bool)($ride->isAllowAnimals() ?? false),
+            'musicStyle'   => $ride->getMusicStyle(),
+        ];
 
         $isDriverViewing = $sessionUserId > 0 && $driver && $driver->getId() === $sessionUserId;
 
-        // participants
-        $parts = $em->getRepository(RideParticipant::class)->findBy(['ride' => $r], ['id' => 'ASC']);
+        // Participants
         $participants = [];
-        foreach ($parts as $p) {
-            $u = $p->getUser();
-            $isSelf = $sessionUserId > 0 && $u && $u->getId() === $sessionUserId;
+        $participantEntities = $em->getRepository(RideParticipant::class)->findBy(['ride' => $ride], ['id' => 'ASC']);
+        foreach ($participantEntities as $participant) {
+            $participantUser = $participant->getUser();
+            $canSeeEmail = $isDriverViewing || ($participantUser && $participantUser->getId() === $sessionUserId);
+
             $participants[] = [
-                'user' => $u ? [
-                    'id'     => $u->getId(),
-                    'pseudo' => $u->getPseudo(),
-                    // on ne montre l’email que pour le conducteur ou soi-même
-                    'email'  => ($isDriverViewing || $isSelf) ? $u->getEmail() : null,
+                'user' => $participantUser ? [
+                    'id'     => $participantUser->getId(),
+                    'pseudo' => $participantUser->getPseudo(),
+                    'email'  => $canSeeEmail ? $participantUser->getEmail() : null,
                 ] : null,
-                'seats'  => $p->getSeatsBooked(),
-                'status' => $p->getStatus(),
+                'seats'       => $participant->getSeatsBooked(),
+                'status'      => $participant->getStatus(),
+                'bookedAt'    => $participant->getRequestedAt()?->format('Y-m-d H:i'),
+                'confirmedAt' => $participant->getConfirmedAt()?->format('Y-m-d H:i'),
+                'cancelledAt' => $participant->getCancelledAt()?->format('Y-m-d H:i'),
             ];
         }
 
         return $this->json([
-            'id'         => $r->getId(),
-            'from'       => $r->getFromCity(),
-            'to'         => $r->getToCity(),
-            'startAt'    => $r->getStartAt()?->format('Y-m-d H:i'),
-            'endAt'      => $r->getEndAt()?->format('Y-m-d H:i'),
-            'price'      => $r->getPrice() !== null ? (float)$r->getPrice() : null,
-            'seatsLeft'  => (int)$r->getSeatsLeft(),
-            'seatsTotal' => (int)$r->getSeatsTotal(),
-            'status'     => $r->getStatus(),
-            'vehicle'    => $v ? [
+            'id'         => $ride->getId(),
+            'from'       => $ride->getFromCity(),
+            'to'         => $ride->getToCity(),
+            'startAt'    => $ride->getStartAt()?->format('Y-m-d H:i'),
+            'endAt'      => $ride->getEndAt()?->format('Y-m-d H:i'),
+            'price'      => $ride->getPrice() !== null ? (float)$ride->getPrice() : null,
+            'seatsLeft'  => (int)$ride->getSeatsLeft(),
+            'seatsTotal' => (int)$ride->getSeatsTotal(),
+            'status'     => $ride->getStatus(),
+            'vehicle'    => $vehicle ? [
                 'brand'  => $brand?->getName(),
-                'model'  => $v->getModel(),
-                'eco'    => (bool)($v->isEco() ?? false),
-                'energy' => $v->getEnergy(),
-                'color'  => $v->getColor(),
+                'model'  => $vehicle->getModel(),
+                'eco'    => (bool)($vehicle->isEco() ?? false),
+                'energy' => $vehicle->getEnergy(),
+                'color'  => $vehicle->getColor(),
+                'seats'  => $vehicle->getSeatsTotal(),
+                // 'plate'  => method_exists($vehicle, 'getPlate') ? $vehicle->getPlate() : null, // décommenter si l'entité l’expose
             ] : null,
             'driver' => $driver ? [
-                'id'     => $driver->getId(),
-                'pseudo' => $driver->getPseudo(),
-                // email visible uniquement pour le conducteur lui-même
-                'email'  => ($isDriverViewing && $sessionUserId === $driver->getId()) ? $driver->getEmail() : null,
+                'id'          => $driver->getId(),
+                'pseudo'      => $driver->getPseudo(),
+                'email'       => $isDriverViewing ? $driver->getEmail() : null,
+                'rating'      => $ratingSummary ? round((float)($ratingSummary['avgRating'] ?? 0), 1) : null,
+                'reviews'     => $ratingSummary ? (int)($ratingSummary['reviewCount'] ?? 0) : 0,
+                'photo'       => $this->guessDriverPhoto($driver),
+                'preferences' => $preferences,
+                'reviewsList' => $reviewsList,
             ] : null,
-            'participants' => $participants,
+            'participants'     => $participants,
+            'viewerId'         => $sessionUserId ?: null,
+            'isDriverViewing'  => $isDriverViewing,
         ]);
     }
 
