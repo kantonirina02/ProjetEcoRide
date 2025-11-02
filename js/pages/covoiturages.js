@@ -42,9 +42,9 @@ async function fetchMyBookedRideIds() {
 
 (function prefillFromQuery() {
   const q = new URLSearchParams(window.location.search);
-  if (q.has("from")) $from.value = q.get("from");
-  if (q.has("to")) $to.value = q.get("to");
-  if (q.has("date")) $date.value = q.get("date");
+  if (q.has("from") && $from) $from.value = q.get("from");
+  if (q.has("to") && $to) $to.value = q.get("to");
+  if (q.has("date") && $date) $date.value = q.get("date");
 })();
 
 function formatRating(driver) {
@@ -88,7 +88,7 @@ function cardTemplate(ride, state) {
           <div class="flex-grow-1">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div>
-                <div class="fw-semibold">${ride.from} → ${ride.to}</div>
+                <div class="fw-semibold">${ride.from} &rarr; ${ride.to}</div>
                 <div class="small text-muted">${ride.startAt ?? ""} · ${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places · ${vehicle.brand ?? ""} ${vehicle.model ?? ""}${vehicle.eco ? " · Trajet eco" : ""}</div>
                 ${ratingHtml ? `<div class="mt-1">${ratingHtml}</div>` : ""}
               </div>
@@ -120,7 +120,7 @@ function renderSuggestion(suggestion) {
   $feedback.innerHTML = `
     <div class="alert alert-warning" role="alert">
       Aucun trajet ne correspond exactement a votre recherche. Prochain trajet disponible :
-      <strong>${suggestion.from} → ${suggestion.to}</strong> le <strong>${formattedDate ?? "date inconnue"}</strong>.
+      <strong>${suggestion.from} &rarr; ${suggestion.to}</strong> le <strong>${formattedDate ?? "date inconnue"}</strong>.
       <button class="btn btn-sm btn-outline-primary ms-2" id="applySuggestion">Utiliser cette date</button>
     </div>
   `;
@@ -134,10 +134,12 @@ function renderSuggestion(suggestion) {
 
 async function render() {
   $err.textContent = "";
-  $feedback.textContent = "Chargement…";
+  $feedback.textContent = "Chargement...";
   $list.innerHTML = "";
 
   try {
+    const ratingParam = $rmin?.value ? Number($rmin.value) : null;
+
     const result = await fetchRides({
       from: $from?.value?.trim() || "",
       to: $to?.value?.trim() || "",
@@ -145,15 +147,24 @@ async function render() {
       eco: ($eco && $eco.checked) ? 1 : undefined,
       priceMax: $pmax?.value ? Number($pmax.value) : undefined,
       durationMax: $dmax?.value ? Number($dmax.value) : undefined,
+      ratingMin: ratingParam != null && !Number.isNaN(ratingParam) ? ratingParam : undefined,
     });
 
-    const rides = Array.isArray(result?.rides) ? result.rides : Array.isArray(result) ? result : [];
+    const rides = Array.isArray(result?.rides)
+      ? result.rides
+      : Array.isArray(result)
+        ? result
+        : [];
     const suggestion = result?.suggestion ?? null;
 
-    // filtre note minimale côté front si le backend ne le gère pas encore
-    const ratingMin = $rmin?.value ? Number($rmin.value) : null;
-    const filteredRides = ratingMin != null && !Number.isNaN(ratingMin)
-      ? rides.filter((ride) => typeof ride?.driver?.rating === "number" ? ride.driver.rating >= ratingMin : ratingMin <= 0)
+    const filteredRides = ratingParam != null && !Number.isNaN(ratingParam)
+      ? rides.filter((ride) => {
+          const rating = ride?.driver?.rating;
+          if (rating == null) {
+            return ratingParam <= 0;
+          }
+          return Number(rating) >= ratingParam;
+        })
       : rides;
 
     if (filteredRides.length === 0) {
@@ -189,7 +200,7 @@ function bindBookButtons() {
       const id = Number(btn.dataset.id);
       btn.disabled = true;
       const old = btn.textContent;
-      btn.textContent = "…";
+      btn.textContent = "...";
 
       try {
         await bookRide(id, { seats: 1 });
