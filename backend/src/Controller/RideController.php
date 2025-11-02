@@ -615,6 +615,92 @@ class RideController extends AbstractController
     }
 
     /**
+     * Cancel a ride as driver (session user).
+     */
+    #[Route('/rides/{id<\d+>}/cancel', name: 'ride_cancel', methods: ['POST'])]
+    public function cancelRideAsDriver(int $id, Request $req, EntityManagerInterface $em): JsonResponse
+    {
+        $driverId = (int)($req->getSession()->get('user_id') ?? 0);
+        if ($driverId <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var Ride|null $ride */
+        $ride = $em->getRepository(Ride::class)->find($id);
+        if (!$ride) {
+            return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $driver = $ride->getDriver();
+        if (!$driver || $driver->getId() !== $driverId) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        if ($ride->getStatus() === 'cancelled') {
+            return $this->json(['error' => 'Ride already cancelled'], Response::HTTP_CONFLICT);
+        }
+
+        try {
+            $em->beginTransaction();
+
+            $participantRepo = $em->getRepository(RideParticipant::class);
+            $participants = $participantRepo->findBy(['ride' => $ride]);
+
+            foreach ($participants as $participant) {
+                if ($participant->getStatus() === 'cancelled') {
+                    continue;
+                }
+
+                $passenger = $participant->getUser();
+                $creditsUsed = (int)($participant->getCreditsUsed() ?? 0);
+
+                if ($creditsUsed > 0 && $passenger) {
+                    $passenger->setCreditsBalance($passenger->getCreditsBalance() + $creditsUsed);
+                    $this->recordLedger($em, $passenger, $ride, $creditsUsed, 'ride_refund');
+                    $em->persist($passenger);
+                }
+
+                if ($creditsUsed > 0 && $driver && $driver->getId() !== $passenger?->getId()) {
+                    $driverShare = max(0, $creditsUsed - self::PLATFORM_FEE);
+                    if ($driverShare > 0) {
+                        $driver->setCreditsBalance($driver->getCreditsBalance() - $driverShare);
+                        $this->recordLedger($em, $driver, $ride, -$driverShare, 'ride_income_reversal');
+                    }
+                }
+
+                $participant
+                    ->setStatus('cancelled')
+                    ->setCancelledAt(new DateTimeImmutable());
+
+                $em->persist($participant);
+            }
+
+            $ride
+                ->setStatus('cancelled')
+                ->setSeatsLeft(0);
+
+            $em->persist($ride);
+            if ($driver) {
+                $em->persist($driver);
+            }
+
+            $em->flush();
+            $em->commit();
+
+            return $this->json([
+                'ok'      => true,
+                'rideId'  => $ride->getId(),
+                'status'  => $ride->getStatus(),
+            ]);
+        } catch (Throwable $e) {
+            if ($em->getConnection()->isTransactionActive()) {
+                $em->rollback();
+            }
+            return $this->json(['error' => 'Cancellation failed', 'detail' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
      * Mes véhicules (session)
      */
     #[Route('/me/vehicles', name: 'my_vehicles', methods: ['GET'])]
@@ -633,15 +719,18 @@ class RideController extends AbstractController
 
         $vehicles = $em->getRepository(Vehicle::class)->findBy(['owner' => $driver], ['model' => 'ASC']);
 
-        $data = array_map(static function (Vehicle $v): array {
-            $brand = $v->getBrand();
+        $data = array_map(static function (Vehicle $vehicle): array {
+            $brand = $vehicle->getBrand();
             return [
-                'id'         => $v->getId(),
-                'label'      => trim(($brand?->getName() ?? '') . ' ' . ($v->getModel() ?? '')),
-                'seatsTotal' => $v->getSeatsTotal(),
-                'eco'        => (bool)($v->isEco() ?? false),
-                'energy'     => $v->getEnergy(),
-                'color'      => $v->getColor(),
+                'id'         => $vehicle->getId(),
+                'label'      => trim(($brand?->getName() ?? '') . ' ' . ($vehicle->getModel() ?? '')),
+                'brand'      => $brand?->getName(),
+                'model'      => $vehicle->getModel(),
+                'seatsTotal' => $vehicle->getSeatsTotal(),
+                'eco'        => (bool)($vehicle->isEco() ?? false),
+                'energy'     => $vehicle->getEnergy(),
+                'color'      => $vehicle->getColor(),
+                'plate'      => $vehicle->getPlate(),
             ];
         }, $vehicles);
 

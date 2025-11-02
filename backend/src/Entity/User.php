@@ -44,6 +44,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'json')]
     private array $roles = [];
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $driverPreferences = null;
+
     /** @var Collection<int, Vehicle> */
     #[ORM\OneToMany(mappedBy: 'owner', targetEntity: Vehicle::class)]
     private Collection $vehicles;
@@ -67,6 +70,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable('now');
+        $this->driverPreferences = [];
         $this->vehicles = new ArrayCollection();
         $this->rides = new ArrayCollection();
         $this->rideParticipants = new ArrayCollection();
@@ -111,6 +115,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return array_values(array_unique($roles));
     }
     public function setRoles(array $roles): self { $this->roles = $roles; return $this; }
+
+    public function getDriverPreferences(): array
+    {
+        return $this->driverPreferences ?? [];
+    }
+
+    public function setDriverPreferences(?array $preferences): self
+    {
+        $this->driverPreferences = $preferences ? array_filter($preferences, static fn($v) => $v !== null) : [];
+        return $this;
+    }
 
     public function eraseCredentials(): void {}
 

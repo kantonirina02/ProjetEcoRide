@@ -12,24 +12,28 @@ export const API_BASE = (() => {
 async function json(res) {
   if (!res.ok) {
     let detail = "";
-    try { detail = JSON.stringify(await res.json()); } catch {}
+    try {
+      detail = JSON.stringify(await res.json());
+    } catch {
+      // ignore
+    }
     throw new Error(`HTTP ${res.status} ${detail}`);
   }
   return res.json();
 }
 
-/* ---------- Rides (recherche) ---------- */
+/* ---------- Search rides ---------- */
 export async function fetchRides({ from = "", to = "", date = "", eco, priceMax, durationMax, ratingMin } = {}) {
-  const p = new URLSearchParams();
-  if (from) p.set("from", from);
-  if (to) p.set("to", to);
-  if (date) p.set("date", date);
-  if (eco !== undefined) p.set("eco", eco ? "1" : "0");
-  if (priceMax) p.set("priceMax", String(priceMax));
-  if (durationMax) p.set("durationMax", String(durationMax));
-  if (ratingMin) p.set("ratingMin", String(ratingMin));
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  if (date) params.set("date", date);
+  if (eco !== undefined) params.set("eco", eco ? "1" : "0");
+  if (priceMax) params.set("priceMax", String(priceMax));
+  if (durationMax) params.set("durationMax", String(durationMax));
+  if (ratingMin) params.set("ratingMin", String(ratingMin));
 
-  const url = `${API_BASE}/rides${p.toString() ? "?" + p.toString() : ""}`;
+  const url = `${API_BASE}/rides${params.toString() ? `?${params.toString()}` : ""}`;
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
     credentials: "include",
@@ -41,7 +45,7 @@ export async function fetchRides({ from = "", to = "", date = "", eco, priceMax,
   return { rides: Array.isArray(payload) ? payload : [], suggestion: null };
 }
 
-/* ---------- RÃƒÆ’Ã‚Â©servation / Annulation ---------- */
+/* ---------- Reservations ---------- */
 export async function bookRide(id, { seats = 1 } = {}) {
   const res = await fetch(`${API_BASE}/rides/${id}/book`, {
     method: "POST",
@@ -60,10 +64,79 @@ export async function unbookRide(rideId) {
   return json(res);
 }
 
-/* ---------- Mes rÃƒÆ’Ã‚Â©servations / Mes trajets ---------- */
+export async function cancelRideAsDriver(rideId) {
+  const res = await fetch(`${API_BASE}/rides/${rideId}/cancel`, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  return json(res);
+}
+
+/* ---------- Current user data ---------- */
+export async function fetchAccountOverview() {
+  const res = await fetch(`${API_BASE}/me/overview`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
+export async function updateDriverRole({ driver }) {
+  const res = await fetch(`${API_BASE}/me/roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ driver: Boolean(driver) }),
+  });
+  return json(res);
+}
+
+export async function saveDriverPreferences(preferences) {
+  const res = await fetch(`${API_BASE}/me/preferences`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify(preferences),
+  });
+  return json(res);
+}
+
+/* ---------- Vehicles ---------- */
+export async function fetchMyVehicles() {
+  const res = await fetch(`${API_BASE}/me/vehicles`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
+export async function saveVehicle(vehicle) {
+  const res = await fetch(`${API_BASE}/me/vehicles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify(vehicle),
+  });
+  return json(res);
+}
+
+export async function deleteVehicle(vehicleId) {
+  const res = await fetch(`${API_BASE}/me/vehicles/${vehicleId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  return json(res);
+}
+
+/* ---------- My bookings / rides ---------- */
 export async function fetchMyBookings() {
-  const res = await fetch(`${API_BASE}/me/bookings`, { credentials: "include" });
-  return json(res); // { auth:boolean, bookings:[...] }
+  const res = await fetch(`${API_BASE}/me/bookings`, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  return json(res);
 }
 
 export async function fetchMyRides() {
@@ -71,7 +144,7 @@ export async function fetchMyRides() {
     headers: { Accept: "application/json" },
     credentials: "include",
   });
-  return json(res); // tableau de trajets
+  return json(res);
 }
 
 /* ---------- Auth ---------- */
@@ -100,7 +173,7 @@ export async function logout() {
   });
 }
 
-/* ---------- CrÃƒÆ’Ã‚Â©ation de trajet ---------- */
+/* ---------- Ride creation ---------- */
 export async function createRide(payload) {
   const res = await fetch(`${API_BASE}/rides`, {
     method: "POST",
@@ -111,27 +184,11 @@ export async function createRide(payload) {
   return json(res);
 }
 
-/* ---------- DÃƒÆ’Ã‚Â©tail d'un trajet ---------- */
+/* ---------- Ride detail ---------- */
 export async function fetchRide(id) {
   const res = await fetch(`${API_BASE}/rides/${id}`, {
     headers: { Accept: "application/json" },
     credentials: "include",
   });
-  if (!res.ok) {
-    let d = ""; try { d = JSON.stringify(await res.json()); } catch {}
-    throw new Error(`HTTP ${res.status} ${d}`);
-  }
   return json(res);
 }
-
-export async function fetchMyVehicles() {
-  const res = await fetch(`${API_BASE}/me/vehicles`, {
-    headers: { Accept: "application/json" },
-    credentials: "include",
-  });
-  return json(res);
-}
-
-
-
-

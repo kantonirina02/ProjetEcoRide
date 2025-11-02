@@ -72,6 +72,8 @@ class AuthController extends AbstractController
         $s->set('user_id',     $user->getId());
         $s->set('user_email',  $user->getEmail());
         $s->set('user_pseudo', $user->getPseudo());
+        $s->set('user_roles',  $user->getRoles());
+        $s->set('user_credits', $user->getCreditsBalance());
 
         return $this->json([
             'ok' => true,
@@ -79,6 +81,8 @@ class AuthController extends AbstractController
                 'id'     => $user->getId(),
                 'email'  => $user->getEmail(),
                 'pseudo' => $user->getPseudo(),
+                'roles'  => $user->getRoles(),
+                'credits'=> $user->getCreditsBalance(),
             ],
         ]);
     }
@@ -86,18 +90,39 @@ class AuthController extends AbstractController
 
     /** GET /api/auth/me */
     #[Route('/me', name: 'me', methods: ['GET'])]
-    public function me(Request $request): JsonResponse
+    public function me(Request $request, EntityManagerInterface $em): JsonResponse
     {
         $s = $request->getSession();
         $uid = (int)($s->get('user_id') ?? 0);
 
+        $userData = null;
+        if ($uid > 0) {
+            /** @var User|null $user */
+            $user = $em->getRepository(User::class)->find($uid);
+            if ($user) {
+                $prefs = array_merge(
+                    [
+                        'allowSmoker'  => false,
+                        'allowAnimals' => false,
+                        'musicStyle'   => null,
+                    ],
+                    $user->getDriverPreferences()
+                );
+
+                $userData = [
+                    'id'        => $user->getId(),
+                    'email'     => $user->getEmail(),
+                    'pseudo'    => $user->getPseudo(),
+                    'roles'     => $user->getRoles(),
+                    'credits'   => $user->getCreditsBalance(),
+                    'preferences' => $prefs,
+                ];
+            }
+        }
+
         return $this->json([
-            'auth' => $uid > 0,
-            'user' => $uid > 0 ? [
-                'id'     => $uid,
-                'email'  => $s->get('user_email'),
-                'pseudo' => $s->get('user_pseudo'),
-            ] : null,
+            'auth' => $userData !== null,
+            'user' => $userData,
         ]);
     }
 
@@ -170,6 +195,8 @@ class AuthController extends AbstractController
         $s->set('user_id',     $user->getId());
         $s->set('user_email',  $user->getEmail());
         $s->set('user_pseudo', $user->getPseudo());
+        $s->set('user_roles',  $user->getRoles());
+        $s->set('user_credits', $user->getCreditsBalance());
 
         return $this->json([
             'ok'   => true,
@@ -177,6 +204,8 @@ class AuthController extends AbstractController
                 'id'     => $user->getId(),
                 'email'  => $user->getEmail(),
                 'pseudo' => $user->getPseudo(),
+                'roles'  => $user->getRoles(),
+                'credits'=> $user->getCreditsBalance(),
             ],
         ], Response::HTTP_CREATED);
     }
