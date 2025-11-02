@@ -1,13 +1,58 @@
-export const API_BASE = (() => {
-  const origin = window.location.origin;
-  if (origin.includes(":8001") || origin.includes(":8002")) {
-    return `${origin}/api`;
+const normalizeBase = (value) => {
+  if (!value) return null;
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (trimmed === "") {
+    return null;
   }
-  if (origin.startsWith("http")) {
-    return "http://localhost:8001/api";
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+};
+
+const computeApiBase = () => {
+  if (typeof window !== "undefined") {
+    const override = typeof window.__API_BASE_OVERRIDE === "string" && window.__API_BASE_OVERRIDE.trim() !== ""
+      ? window.__API_BASE_OVERRIDE
+      : typeof window.__API_BASE === "string" && window.__API_BASE.trim() !== ""
+        ? window.__API_BASE
+        : null;
+    if (override) {
+      const normalized = normalizeBase(override);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    const meta = typeof document !== "undefined"
+      ? document.querySelector('meta[name="api-base"]')
+      : null;
+    if (meta?.content) {
+      const normalized = normalizeBase(meta.content);
+      if (normalized) {
+        return normalized;
+      }
+    }
   }
-  return "http://127.0.0.1:8001/api";
-})();
+
+  if (typeof window === "undefined" || !window.location) {
+    return "http://127.0.0.1:8001/api";
+  }
+
+  const { protocol, hostname, port } = window.location;
+  const normalizedProtocol = protocol && protocol !== ":" ? protocol : "http:";
+  const normalizedHost = hostname && hostname !== "" ? hostname : "localhost";
+  const currentPort = port && port !== "" ? port : null;
+
+  if (!currentPort || ["3000", "5173", "8080"].includes(currentPort)) {
+    return `${normalizedProtocol}//${normalizedHost}:8001/api`;
+  }
+
+  if (["8001", "8002"].includes(currentPort)) {
+    return `${normalizedProtocol}//${normalizedHost}:${currentPort}/api`;
+  }
+
+  return `${normalizedProtocol}//${normalizedHost}:8001/api`;
+};
+
+export const API_BASE = computeApiBase();
 
 if (typeof window !== "undefined") {
   window.__API_BASE = API_BASE;

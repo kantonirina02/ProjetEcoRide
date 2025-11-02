@@ -1,4 +1,8 @@
 {
+  "type": "module",
+  "scripts": {
+    "test:js": "node --test js/tests/api.test.js"
+  },
   "dependencies": {
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1"
