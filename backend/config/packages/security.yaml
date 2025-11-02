@@ -18,7 +18,7 @@ security:
       lazy: true
       stateless: false        # session-based
       logout:
-        path: /api/auth/logout
+        path: /logout
         invalidate_session: true
 
   access_control:

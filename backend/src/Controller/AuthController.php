@@ -10,10 +10,16 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken;
 
 #[Route('/api/auth', name: 'api_auth_')]
 class AuthController extends AbstractController
 {
+    public function __construct(private TokenStorageInterface $tokenStorage)
+    {
+    }
+
     /* -- Utils de validation -- */
 
     private function isValidEmail(string $email): bool
@@ -73,13 +79,15 @@ class AuthController extends AbstractController
             return $this->json(['error' => 'Mot de passe invalide'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Session
+        // Session + security token
         $s = $request->getSession();
         $s->set('user_id',     $user->getId());
         $s->set('user_email',  $user->getEmail());
         $s->set('user_pseudo', $user->getPseudo());
         $s->set('user_roles',  $user->getRoles());
         $s->set('user_credits', $user->getCreditsBalance());
+        $token = new PostAuthenticationToken($user, 'main', $user->getRoles());
+        $this->tokenStorage->setToken($token);
 
         return $this->json([
             'ok' => true,
@@ -205,6 +213,8 @@ class AuthController extends AbstractController
         $s->set('user_pseudo', $user->getPseudo());
         $s->set('user_roles',  $user->getRoles());
         $s->set('user_credits', $user->getCreditsBalance());
+        $token = new PostAuthenticationToken($user, 'main', $user->getRoles());
+        $this->tokenStorage->setToken($token);
 
         return $this->json([
             'ok'   => true,
