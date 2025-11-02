@@ -1,0 +1,78 @@
+<div class="container py-4">
+  <style>
+    .chart-stack {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 160px;
+      padding-bottom: 8px;
+    }
+    .chart-stack .chart-bar {
+      flex: 1;
+      min-width: 16px;
+      border-radius: 4px 4px 0 0;
+      background-color: var(--bs-primary);
+    }
+    .chart-stack.text-bg-success .chart-bar {
+      background-color: var(--bs-success);
+    }
+    .chart-stack.text-bg-info .chart-bar {
+      background-color: var(--bs-info);
+    }
+    .chart-label {
+      flex: 1;
+      font-size: 0.75rem;
+      text-align: center;
+    }
+  </style>
+
+  <h2 class="mb-3">Espace administrateur</h2>
+  <p class="text-muted">Surveillez l'activité de la plateforme, validez les avis et gérez les comptes utilisateurs.</p>
+
+  <div id="admin-error" class="alert alert-danger d-none" role="alert"></div>
+  <div id="admin-success" class="alert alert-success d-none" role="alert"></div>
+
+  <section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h3 class="h5 mb-0">Statistiques</h3>
+      <button id="admin-refresh" class="btn btn-outline-primary btn-sm">Actualiser</button>
+    </div>
+    <div id="admin-metrics-feedback" class="text-muted mb-2">Chargement des métriques...</div>
+    <div id="admin-metrics" class="row g-3"></div>
+  </section>
+
+  <section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h3 class="h5 mb-0">Modération des avis</h3>
+      <select id="admin-review-status" class="form-select form-select-sm w-auto">
+        <option value="pending" selected>En attente</option>
+        <option value="approved">Approuvés</option>
+        <option value="rejected">Rejetés</option>
+        <option value="all">Tous</option>
+      </select>
+    </div>
+    <div id="admin-reviews-feedback" class="text-muted mb-2">Chargement des avis...</div>
+    <div id="admin-reviews" class="d-flex flex-column gap-3"></div>
+  </section>
+
+  <section>
+    <h3 class="h5 mb-2">Gestion des comptes</h3>
+    <div id="admin-users-feedback" class="text-muted mb-2">Chargement des comptes...</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Pseudo</th>
+            <th>Rôles</th>
+            <th>Crédits</th>
+            <th>Statut</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="admin-users"></tbody>
+      </table>
+    </div>
+  </section>
+</div>

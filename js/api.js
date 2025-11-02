@@ -9,6 +9,10 @@ export const API_BASE = (() => {
   return "http://127.0.0.1:8001/api";
 })();
 
+if (typeof window !== "undefined") {
+  window.__API_BASE = API_BASE;
+}
+
 async function json(res) {
   if (!res.ok) {
     let detail = "";
@@ -79,6 +83,9 @@ export async function fetchAccountOverview() {
     headers: { Accept: "application/json" },
     credentials: "include",
   });
+  if (res.status === 401 || res.status === 403) {
+    return { auth: false };
+  }
   return json(res);
 }
 
@@ -108,6 +115,9 @@ export async function fetchMyVehicles() {
     headers: { Accept: "application/json" },
     credentials: "include",
   });
+  if (res.status === 401 || res.status === 403) {
+    return { auth: false, vehicles: [] };
+  }
   return json(res);
 }
 
@@ -126,6 +136,45 @@ export async function deleteVehicle(vehicleId) {
     method: "DELETE",
     credentials: "include",
     headers: { Accept: "application/json" },
+  });
+  return json(res);
+}
+
+/* ---------- Moderation / Admin ---------- */
+export async function fetchModerationReviews(status = "pending") {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  const res = await fetch(`${API_BASE}/moderation/reviews?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
+export async function moderateReview(id, { action, note }) {
+  const res = await fetch(`${API_BASE}/moderation/reviews/${id}/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ action, note }),
+  });
+  return json(res);
+}
+
+export async function fetchAdminMetrics() {
+  const res = await fetch(`${API_BASE}/admin/metrics`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
+export async function suspendUser(id, { suspend = true, reason } = {}) {
+  const res = await fetch(`${API_BASE}/admin/users/${id}/suspend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ suspend, reason }),
   });
   return json(res);
 }

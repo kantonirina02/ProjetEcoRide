@@ -24,11 +24,21 @@ const getRouteByUrl = (url) => {
 // -------- met à jour la visibilité des liens selon la session --------
 function applyAuthVisibility() {
   const sess = getSession();
+  const roles = Array.isArray(sess?.user?.roles) ? sess.user.roles : [];
+  const isEmployee = roles.includes("ROLE_EMPLOYEE") || roles.includes("ROLE_ADMIN");
+  const isAdmin = roles.includes("ROLE_ADMIN");
+
   document.querySelectorAll("[data-show-connected]").forEach(el => {
     el.style.display = sess && sess.user ? "" : "none";
   });
   document.querySelectorAll("[data-show-disconnected]").forEach(el => {
     el.style.display = sess && sess.user ? "none" : "";
+  });
+  document.querySelectorAll("[data-show-employee]").forEach(el => {
+    el.style.display = isEmployee ? "" : "none";
+  });
+  document.querySelectorAll("[data-show-admin]").forEach(el => {
+    el.style.display = isAdmin ? "" : "none";
   });
 }
 
