@@ -6,27 +6,39 @@ use App\Document\SearchLog;
 use Doctrine\ODM\MongoDB\DocumentManager;
 use Symfony\Component\HttpFoundation\RequestStack;
 
-class SearchLogger
+final class SearchLogger
 {
     public function __construct(
-        private DocumentManager $dm,
-        private RequestStack $stack
+        private readonly DocumentManager $dm,
+        private readonly RequestStack $stack
     ) {}
 
-    public function log(string $from, string $to, string $date, int $resultCount, ?string $userId = null): void
-    {
-        $req = $this->stack->getCurrentRequest();
+    /**
+     * Log d'une recherche de covoiturages.
+     */
+    public function log(
+        ?string $from = null,
+        ?string $to = null,
+        ?string $date = null,
+        ?int $resultCount = null,
+        ?int $userId = null
+    ): void {
+        try {
+            $req = $this->stack->getCurrentRequest();
 
-        $log = (new SearchLog())
-            ->setFrom($from)
-            ->setTo($to)
-            ->setDate($date)
-            ->setResultCount($resultCount)
-            ->setUserId($userId)
-            ->setClientIp($req?->getClientIp())
-            ->setUserAgent($req?->headers->get('User-Agent'));
+            $log = (new SearchLog())
+                ->setFrom($from)
+                ->setTo($to)
+                ->setDate($date)
+                ->setResultCount($resultCount ?? 0)
+                ->setUserId($userId !== null ? (string)$userId : null)
+                ->setClientIp($req?->getClientIp())
+                ->setUserAgent($req?->headers->get('User-Agent'));
 
-        $this->dm->persist($log);
-        $this->dm->flush();
+            $this->dm->persist($log);
+            $this->dm->flush();
+        } catch (\Throwable $e) {
+            // on ignore toute erreur de log (pas de remontée pour ne pas casser l'API)
+        }
     }
 }

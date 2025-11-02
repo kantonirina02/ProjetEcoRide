@@ -31,3 +31,7 @@ services:
   #   arguments:
   #     $dm: '@doctrine_mongodb.odm.document_manager'
   #     $stack: '@request_stack'
+  App\Service\SearchLogger:
+    arguments:
+      $dm: '@doctrine_mongodb.odm.document_manager'
+      $stack: '@request_stack'
