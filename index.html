@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="scss/main.css">
-    <title>Document</title>
+    <title>EcoRide</title>
 </head>
 <body>
     <header class="bg-primary text-white py-3">
@@ -20,7 +20,7 @@
                             <a href="/" class="nav-link" data-link>Accueil</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/bookings" data-link>Mes reservations</a>
+                            <a class="nav-link" href="/bookings" data-link>Mes réservations</a>
                         </li>
                         <li class="nav-item">
                             <a href="/covoiturages" class="nav-link" data-link>Covoiturages</a>
@@ -29,7 +29,7 @@
                             <a href="/#contact-footer" class="nav-link">Contact</a>
                         </li>
                         <li class="nav-item">
-                            <a href="/mentions-legales" class="nav-link" data-link>Mentions legales</a>
+                            <a href="/mentions-legales" class="nav-link" data-link>Mentions légales</a>
                         </li>
                         <li class="nav-item" data-show-disconnected>
                             <a href="/signin" class="nav-link" data-link>Connexion</a>
@@ -41,16 +41,16 @@
                             <a href="/account" class="nav-link" data-link>Mon Profil</a>
                         </li>
                         <li class="nav-item" data-show-connected>
-                            <a href="/new-rides" class="nav-link" data-link>Creer un trajet</a>
+                            <a href="/new-rides" class="nav-link" data-link>Créer un trajet</a>
                         </li>
                         <li class="nav-item" data-show-employee style="display: none;">
-                            <a href="/employee" class="nav-link" data-link>Moderation</a>
+                            <a href="/employee" class="nav-link" data-link>Modération</a>
                         </li>
                         <li class="nav-item" data-show-admin style="display: none;">
                             <a href="/admin" class="nav-link" data-link>Espace admin</a>
                         </li>
                         <li class="nav-item" data-show-connected>
-                            <a href="/" onclick="return signout(event)" class="nav-link">Deconnexion</a>
+                            <a href="/" onclick="return signout(event)" class="nav-link">Déconnexion</a>
                         </li>
                     </ul>
                 </div>
@@ -66,7 +66,7 @@
             <div class="row gy-3">
                 <div class="col-md-6 text-center text-md-start">
                     <p class="mb-1 fw-bold">EcoRide</p>
-                    <p class="mb-0">&copy; 2025 - Plateforme de covoiturage Ecologique</p>
+                    <p class="mb-0">&copy; 2025 - Plateforme de covoiturage écologique</p>
                 </div>
                 <div class="col-md-6 text-center text-md-end">
                     <p class="mb-1">
@@ -90,10 +90,10 @@
     <script type="module">
       import("/js/auth/session.js").then((mod) => {
         window.signout = async function (e) {
-          try { if (e && typeof e.preventDefault === 'function') e.preventDefault(); } catch {}
+          try { if (e && typeof e.preventDefault === "function") e.preventDefault(); } catch {}
           try {
-            const apiBase = (window.__API_BASE || 'http://localhost:8001/api').replace(/\/$/, '');
-            await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
+            const apiBase = (window.__API_BASE || "http://localhost:8001/api").replace(/\/$/, "");
+            await fetch(`${apiBase}/auth/logout`, { method: "POST", credentials: "include" });
           } catch {}
           mod.clearSession();
           if (typeof window.navigate === "function") window.navigate("/");
