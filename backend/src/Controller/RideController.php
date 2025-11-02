@@ -131,7 +131,9 @@ class RideController extends AbstractController
             $ratingRows = $reviewRepo->createQueryBuilder('rev')
                 ->select('IDENTITY(rev.target) AS targetId', 'AVG(rev.rating) AS avgRating', 'COUNT(rev.id) AS reviewCount')
                 ->where('rev.target IN (:ids)')
+                ->andWhere('rev.status = :approvedStatus')
                 ->setParameter('ids', array_unique($driverIds))
+                ->setParameter('approvedStatus', 'approved')
                 ->groupBy('rev.target')
                 ->getQuery()
                 ->getArrayResult();
@@ -1036,11 +1038,16 @@ class RideController extends AbstractController
                 ->select('AVG(review.rating) AS avgRating', 'COUNT(review.id) AS reviewCount')
                 ->from('App\Entity\Review', 'review')
                 ->where('review.target = :driver')
+                ->andWhere('review.status = :status')
                 ->setParameter('driver', $driver)
+                ->setParameter('status', 'approved')
                 ->getQuery()
                 ->getOneOrNullResult();
 
-            $driverReviews = $reviewRepository->findBy(['target' => $driver], ['createdAt' => 'DESC']);
+            $driverReviews = $reviewRepository->findBy(
+                ['target' => $driver, 'status' => 'approved'],
+                ['createdAt' => 'DESC']
+            );
             foreach ($driverReviews as $review) {
                 $author = $review->getAuthor();
                 $reviewsList[] = [

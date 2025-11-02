@@ -47,6 +47,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $driverPreferences = null;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $suspendedAt = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $suspensionReason = null;
+
     /** @var Collection<int, Vehicle> */
     #[ORM\OneToMany(mappedBy: 'owner', targetEntity: Vehicle::class)]
     private Collection $vehicles;
@@ -124,6 +130,28 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setDriverPreferences(?array $preferences): self
     {
         $this->driverPreferences = $preferences ? array_filter($preferences, static fn($v) => $v !== null) : [];
+        return $this;
+    }
+
+    public function getSuspendedAt(): ?\DateTimeImmutable
+    {
+        return $this->suspendedAt;
+    }
+
+    public function setSuspendedAt(?\DateTimeImmutable $suspendedAt): self
+    {
+        $this->suspendedAt = $suspendedAt;
+        return $this;
+    }
+
+    public function getSuspensionReason(): ?string
+    {
+        return $this->suspensionReason;
+    }
+
+    public function setSuspensionReason(?string $reason): self
+    {
+        $this->suspensionReason = $reason;
         return $this;
     }
 

@@ -24,6 +24,20 @@ class AppFixtures extends Fixture
         $u->setPassword($this->hasher->hashPassword($u, 'Passw0rd!'));
         $em->persist($u);
 
+        $employee = (new User())
+            ->setEmail('employee@mail.test')
+            ->setPseudo('EcoEmploye')
+            ->setRoles(['ROLE_USER', 'ROLE_EMPLOYEE']);
+        $employee->setPassword($this->hasher->hashPassword($employee, 'Passw0rd!'));
+        $em->persist($employee);
+
+        $admin = (new User())
+            ->setEmail('admin@mail.test')
+            ->setPseudo('EcoAdmin')
+            ->setRoles(['ROLE_USER', 'ROLE_ADMIN']);
+        $admin->setPassword($this->hasher->hashPassword($admin, 'Passw0rd!'));
+        $em->persist($admin);
+
         // Tesla + Vehicle
         $b = (new Brand())->setName('Tesla'); $em->persist($b);
         $v = (new Vehicle())

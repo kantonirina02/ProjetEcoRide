@@ -58,6 +58,12 @@ class AuthController extends AbstractController
         if (!$user) {
             return $this->json(['error' => 'Utilisateur inconnu'], Response::HTTP_UNAUTHORIZED);
         }
+        if ($user->getSuspendedAt() !== null) {
+            return $this->json([
+                'error' => 'Compte suspendu',
+                'reason' => $user->getSuspensionReason(),
+            ], Response::HTTP_FORBIDDEN);
+        }
 
         $stored = (string)($user->getPassword() ?? '');
         $isHash = str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2');
@@ -116,6 +122,8 @@ class AuthController extends AbstractController
                     'roles'     => $user->getRoles(),
                     'credits'   => $user->getCreditsBalance(),
                     'preferences' => $prefs,
+                    'suspended' => $user->getSuspendedAt() !== null,
+                    'suspensionReason' => $user->getSuspensionReason(),
                 ];
             }
         }
