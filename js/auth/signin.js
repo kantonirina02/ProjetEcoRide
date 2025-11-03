@@ -7,8 +7,8 @@ const password = document.getElementById("password");
 const err = document.getElementById("signin-error");
 
 if (form) {
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
     err.classList.add("d-none");
     err.textContent = "";
 
@@ -19,23 +19,25 @@ if (form) {
     }
 
     try {
-      const res = await login({ email: email.value.trim(), password: password.value.trim() });
-      // Le backend crée la session (cookie); on garde aussi une copie locale utile au front
-      setSession({ user: res.user, token: "session" });
-    } catch (e) {
+      const result = await login({
+        email: email.value.trim(),
+        password: password.value.trim(),
+      });
+      // Le backend crée la session (cookie) ; on conserve aussi une copie locale utile au front
+      setSession({ user: result.user, token: "session" });
+    } catch (error) {
       err.textContent = "Identifiants invalides ou serveur injoignable.";
       err.classList.remove("d-none");
       return;
     }
 
-    // redirection SPA et rechargement du contenu
+    // Redirection SPA et rechargement du contenu
     if (typeof window.navigate === "function") {
       window.navigate("/");
     } else {
-      // (sécurité si router n'est pas chargé, peu probable)
+      // Sécurité si le router n'est pas chargé (rare)
       window.history.pushState({}, "", "/");
       window.location.reload();
     }
   });
 }
-

@@ -1,4 +1,4 @@
-﻿import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
+import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
 
 const getSession = () => window.__session ?? null;
 
@@ -28,7 +28,9 @@ function navigate(href) {
 async function fetchMyBookedRideIds() {
   try {
     const data = await fetchMyBookings();
-    if (!data?.auth || !Array.isArray(data.bookings)) return new Set();
+    if (!data?.auth || !Array.isArray(data.bookings)) {
+      return new Set();
+    }
     return new Set(
       data.bookings
         .map((item) => (typeof item === "number" ? item : item.rideId))
@@ -58,17 +60,21 @@ function formatRating(driver) {
 
 function cardTemplate(ride, state) {
   const session = getSession();
-  const isDriver = !!(session?.user?.id) && ride?.driver?.id === session.user.id;
+  const isDriver =
+    Boolean(session?.user?.id) && ride?.driver?.id === session.user.id;
   const soldOut = ride.soldOut || (ride.seatsLeft ?? 0) <= 0;
   const alreadyBooked = state.bookedIds.has(ride.id);
 
   let actionHtml = "";
   if (isDriver) {
-    actionHtml = `<button class="btn btn-secondary btn-sm" disabled>Vous êtes le conducteur</button>`;
+    actionHtml =
+      '<button class="btn btn-secondary btn-sm" disabled>Vous êtes le conducteur</button>';
   } else if (alreadyBooked) {
-    actionHtml = `<button class="btn btn-success btn-sm" disabled>Réservé</button>`;
+    actionHtml =
+      '<button class="btn btn-success btn-sm" disabled>Réservé</button>';
   } else if (soldOut) {
-    actionHtml = `<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>`;
+    actionHtml =
+      '<button class="btn btn-outline-secondary btn-sm" disabled>Complet</button>';
   } else {
     actionHtml = `<button class="btn btn-outline-primary btn-sm js-book" data-id="${ride.id}">Réserver</button>`;
   }
@@ -77,6 +83,11 @@ function cardTemplate(ride, state) {
   const driver = ride.driver || {};
   const driverPhoto = driver.photo || FALLBACK_PHOTO;
   const ratingHtml = formatRating(driver);
+
+  const seatsInfo = `${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places`;
+  const vehicleInfo = `${vehicle.brand ?? ""} ${vehicle.model ?? ""}`.trim();
+  const ecoInfo = vehicle.eco ? " · trajet éco" : "";
+  const detailLine = `${ride.startAt ?? ""} · ${seatsInfo} · ${vehicleInfo}${ecoInfo}`;
 
   return `
     <div class="card mb-3 shadow-sm">
@@ -89,7 +100,7 @@ function cardTemplate(ride, state) {
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div>
                 <div class="fw-semibold">${ride.from} &rarr; ${ride.to}</div>
-                <div class="small text-muted">${ride.startAt ?? ""} · ${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places · ${vehicle.brand ?? ""} ${vehicle.model ?? ""}${vehicle.eco ? " · Trajet éco" : ""}</div>
+                <div class="small text-muted">${detailLine}</div>
                 ${ratingHtml ? `<div class="mt-1">${ratingHtml}</div>` : ""}
               </div>
               <div class="text-end">
@@ -116,7 +127,9 @@ function renderSuggestion(suggestion) {
     $feedback.textContent = "Aucun résultat.";
     return;
   }
-  const formattedDate = suggestion.startAt ? suggestion.startAt.replace(" ", " · ") : suggestion.date;
+  const formattedDate = suggestion.startAt
+    ? suggestion.startAt.replace(" ", " · ")
+    : suggestion.date;
   $feedback.innerHTML = `
     <div class="alert alert-warning" role="alert">
       Aucun trajet ne correspond exactement à votre recherche. Prochain trajet disponible :
@@ -144,28 +157,32 @@ async function render() {
       from: $from?.value?.trim() || "",
       to: $to?.value?.trim() || "",
       date: $date?.value || "",
-      eco: ($eco && $eco.checked) ? 1 : undefined,
+      eco: $eco?.checked ? 1 : undefined,
       priceMax: $pmax?.value ? Number($pmax.value) : undefined,
       durationMax: $dmax?.value ? Number($dmax.value) : undefined,
-      ratingMin: ratingParam != null && !Number.isNaN(ratingParam) ? ratingParam : undefined,
+      ratingMin:
+        ratingParam != null && !Number.isNaN(ratingParam)
+          ? ratingParam
+          : undefined,
     });
 
     const rides = Array.isArray(result?.rides)
       ? result.rides
       : Array.isArray(result)
-        ? result
-        : [];
+      ? result
+      : [];
     const suggestion = result?.suggestion ?? null;
 
-    const filteredRides = ratingParam != null && !Number.isNaN(ratingParam)
-      ? rides.filter((ride) => {
-          const rating = ride?.driver?.rating;
-          if (rating == null) {
-            return ratingParam <= 0;
-          }
-          return Number(rating) >= ratingParam;
-        })
-      : rides;
+    const filteredRides =
+      ratingParam != null && !Number.isNaN(ratingParam)
+        ? rides.filter((ride) => {
+            const rating = ride?.driver?.rating;
+            if (rating == null) {
+              return ratingParam <= 0;
+            }
+            return Number(rating) >= ratingParam;
+          })
+        : rides;
 
     if (filteredRides.length === 0) {
       $list.innerHTML = "";
@@ -178,7 +195,9 @@ async function render() {
     const bookedIds = await fetchMyBookedRideIds();
     const state = { bookedIds };
 
-    $list.innerHTML = filteredRides.map((ride) => cardTemplate(ride, state)).join("");
+    $list.innerHTML = filteredRides
+      .map((ride) => cardTemplate(ride, state))
+      .join("");
     bindBookButtons();
   } catch (error) {
     console.error(error);
@@ -192,14 +211,14 @@ function bindBookButtons() {
     btn.addEventListener("click", async () => {
       const session = getSession();
       if (!session || !session.user) {
-        alert("Connecte-toi d'abord pour réserver.");
+        window.alert("Connecte-toi d'abord pour réserver.");
         navigate("/signin");
         return;
       }
 
       const id = Number(btn.dataset.id);
       btn.disabled = true;
-      const old = btn.textContent;
+      const previousText = btn.textContent;
       btn.textContent = "...";
 
       try {
@@ -211,10 +230,10 @@ function bindBookButtons() {
         }
       } catch (error) {
         console.error(error);
-        alert("Échec de la réservation");
+        window.alert("Échec de la réservation.");
       } finally {
         btn.disabled = false;
-        btn.textContent = old;
+        btn.textContent = previousText;
       }
     });
   });
