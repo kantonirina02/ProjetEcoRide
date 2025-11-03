@@ -1,98 +1,276 @@
 @import url(/node_modules/bootstrap-icons/font/bootstrap-icons.css);
-@import 'custom';
+@import "custom";
 
+html,
+body {
+  min-height: 100%;
+}
 
-html, body{
-    min-height: 100%;
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: $light;
+  color: $body-color;
+  font-family: $font-family-sans-serif;
 }
-body{
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+
+main {
+  flex: 1 0 auto;
+  padding-bottom: 2rem;
 }
-main{
-    flex: 1 0 auto;
+
+footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  width: 100%;
+  padding: 2rem 0;
 }
-footer{
-    flex-shrink: 0;
-    margin-top: auto;
-    width: 100%;
-    padding: 30px;
+
+header .navbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
-p{
-    font-family: $font-family-sans-serif;
-}
+
 .presentation {
-    margin-top: 20px;
-    padding: 20px;
-}
-.square-image {
-    width: 300px;
-    height: 300px;
-    object-fit: cover;
-    flex-shrink: 0; 
-    border-radius: 20px;
-}
-.search-bar {
-    display: flex;
-    align-items: center;
-    margin-top: 50px;
-    padding: 20px;
-    border-radius: 5px;
-    justify-content: center;
-}
-.search-bar button:hover {
-    background: $secondary;
-    color: $dark;
-}
-.search-bar button {
-    cursor: pointer;
-    border-radius: 3px;
-}
-.search-bar {
-    flex: 1;
-    margin:10px;
-    border-radius: 3px;
-    border: 1px solid #ccc;
-}
-.search-bar, .search-bar button {
-    outline: none;
-    padding: 8px;
-}
-input, select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    transition: border-color 0.3s ease;
-    
-    &:focus {
-        border-color: $primary;
-        outline: none;
-        box-shadow: 0 0 0 2px rgba($primary, 0.2);
-    }
+  margin-top: 2rem;
+  padding: 2rem 1rem;
+  text-align: center;
+
+  .lead {
+    max-width: 60ch;
+    margin: 0 auto;
+  }
 }
 
-@media (max-width: 768px) { 
-    .square-image {
-        width: 150px;
-        height: 150px;
+.square-image {
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 20px;
+  display: block;
+  margin-inline: auto;
+}
+
+.search-container {
+  border-radius: 1rem;
+  background-color: $body-bg;
+}
+
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background-color: rgba($primary, 0.05);
+
+  .form-control {
+    min-width: 180px;
+  }
+
+  button {
+    border-radius: 999px;
+    padding-inline: 1.75rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      background-color: $secondary;
+      color: $body-color;
     }
-    .search-bar {
-        flex-direction: column;
-        width: 100%;
-        padding: 10px;
+  }
+}
+
+input,
+select {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid $border-color;
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    border-color: $primary;
+    box-shadow: 0 0 0 0.2rem rgba($primary, 0.25);
+    outline: 0;
+  }
+}
+
+.card.shadow-sm {
+  border: 0;
+  border-radius: 1rem;
+}
+
+.ride-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.badge.text-bg-light {
+  border: 1px solid rgba($primary, 0.15);
+}
+
+.chart-stack {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 160px;
+  padding-bottom: 0.5rem;
+
+  .chart-bar {
+    flex: 1;
+    min-width: 16px;
+    border-radius: 0.5rem 0.5rem 0 0;
+    background-color: $primary;
+  }
+
+  &.text-bg-success .chart-bar {
+    background-color: $success;
+  }
+
+  &.text-bg-info .chart-bar {
+    background-color: $info;
+  }
+}
+
+.chart-label {
+  flex: 1;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.table-responsive {
+  border-radius: 0.75rem;
+  background-color: $body-bg;
+}
+
+.account-photo-wrapper {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px dashed rgba($primary, 0.35);
+  background-color: rgba($primary, 0.05);
+  color: $secondary;
+}
+
+.account-sections {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.account-cards {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.ride-meta {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.filters-panel {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.suggestion-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ride-participants,
+.ride-reviews {
+  display: grid;
+  gap: 1rem;
+}
+
+.moderation-cards .card {
+  border-left: 4px solid rgba($warning, 0.4);
+}
+
+@include media-breakpoint-down(lg) {
+  .account-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ride-actions {
+    justify-content: flex-start;
+  }
+}
+
+@include media-breakpoint-down(md) {
+  footer {
+    text-align: center;
+  }
+
+  .presentation {
+    text-align: center;
+  }
+
+  .search-bar {
+    padding: 1.25rem;
+
+    .form-control {
+      min-width: 100%;
     }
-    .search-bar input {
-        width: 100%;
-        margin: 5px;
-        font-size: 14px;
-        padding: 8px;
-    }
-    .search-bar button {
-        width: 100%;
-        font-size: 14px;
-        padding: 8px;
-    }
+  }
+
+  .square-image {
+    max-width: 220px;
+  }
+
+  .account-sections {
+    grid-template-columns: 1fr;
+  }
+
+  .ride-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .suggestion-alert {
+    justify-content: center;
+  }
+
+  .chart-stack {
+    height: 120px;
+  }
+}
+
+@include media-breakpoint-down(sm) {
+  header .navbar-brand {
+    font-size: 1.25rem;
+  }
+
+  .search-bar {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .square-image {
+    max-width: 160px;
+  }
+
+  .ride-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-panel {
+    grid-template-columns: 1fr;
+  }
 }

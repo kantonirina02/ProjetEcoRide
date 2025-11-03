@@ -1153,6 +1153,9 @@ class RideController extends AbstractController
         if (!$driver) {
             return null;
         }
+        if ($driver->getProfilePhoto()) {
+            return $driver->getProfilePhoto();
+        }
         $pseudo = strtolower((string)$driver->getPseudo());
         if (str_contains($pseudo, 'martin') || str_contains($pseudo, 'max')) {
             return '/images/Martin.jpg';

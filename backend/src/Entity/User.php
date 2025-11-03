@@ -53,6 +53,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $suspensionReason = null;
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $profilePhoto = null;
+
     /** @var Collection<int, Vehicle> */
     #[ORM\OneToMany(mappedBy: 'owner', targetEntity: Vehicle::class)]
     private Collection $vehicles;
@@ -152,6 +155,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setSuspensionReason(?string $reason): self
     {
         $this->suspensionReason = $reason;
+        return $this;
+    }
+
+    public function getProfilePhoto(): ?string
+    {
+        return $this->profilePhoto;
+    }
+
+    public function setProfilePhoto(?string $profilePhoto): self
+    {
+        $this->profilePhoto = $profilePhoto;
         return $this;
     }
 

@@ -33,11 +33,11 @@ security:
     - { path: ^/api/me/bookings$, roles: PUBLIC_ACCESS, methods: [GET] }
 
     # protégés (gérés côté contrôleur par session)
-    - { path: ^/api/me/(overview|roles|preferences|vehicles)$, roles: PUBLIC_ACCESS }
+    - { path: ^/api/me/(overview|roles|preferences|vehicles|bookings|rides)$, roles: ROLE_USER }
     - { path: ^/api/rides/\d+/book$, roles: ROLE_USER, methods: [POST,DELETE] }
-    - { path: ^/api/rides/\d+/cancel$, roles: PUBLIC_ACCESS }
-    - { path: ^/api/moderation, roles: PUBLIC_ACCESS }
-    - { path: ^/api/admin, roles: PUBLIC_ACCESS }
+    - { path: ^/api/rides/\d+/cancel$, roles: ROLE_USER }
+    - { path: ^/api/moderation, roles: ROLE_EMPLOYEE }
+    - { path: ^/api/admin, roles: ROLE_ADMIN }
 
 when@test:
   security:

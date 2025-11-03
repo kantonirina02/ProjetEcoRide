@@ -46,43 +46,67 @@ class AdminDashboardController extends AbstractController
             $cursor = $cursor->modify('+1 month');
         }
 
-        $rideStats = $em->createQueryBuilder()
-            ->select("FUNCTION('DATE_FORMAT', r.startAt, '%Y-%m') AS ym", 'COUNT(r.id) AS total')
+        $rides = $em->createQueryBuilder()
+            ->select('r')
             ->from(Ride::class, 'r')
             ->where('r.startAt >= :start')
-            ->groupBy('ym')
             ->setParameter('start', $start)
-            ->getQuery()->getArrayResult();
+            ->getQuery()
+            ->getResult();
 
-        foreach ($rideStats as $row) {
-            $key = $row['ym'];
-            if (isset($months[$key])) $months[$key]['rides'] = (int)$row['total'];
+        foreach ($rides as $ride) {
+            if (!$ride instanceof Ride) {
+                continue;
+            }
+            $date = $ride->getStartAt();
+            if ($date instanceof DateTimeImmutable) {
+                $key = $date->format('Y-m');
+                if (isset($months[$key])) {
+                    $months[$key]['rides']++;
+                }
+            }
         }
 
-        $bookingStats = $em->createQueryBuilder()
-            ->select("FUNCTION('DATE_FORMAT', p.requestedAt, '%Y-%m') AS ym", 'COUNT(p.id) AS total')
+        $participants = $em->createQueryBuilder()
+            ->select('p')
             ->from(RideParticipant::class, 'p')
             ->where('p.requestedAt >= :start')
-            ->groupBy('ym')
             ->setParameter('start', $start)
-            ->getQuery()->getArrayResult();
+            ->getQuery()
+            ->getResult();
 
-        foreach ($bookingStats as $row) {
-            $key = $row['ym'];
-            if (isset($months[$key])) $months[$key]['bookings'] = (int)$row['total'];
+        foreach ($participants as $participant) {
+            if (!$participant instanceof RideParticipant) {
+                continue;
+            }
+            $date = $participant->getRequestedAt();
+            if ($date instanceof DateTimeImmutable) {
+                $key = $date->format('Y-m');
+                if (isset($months[$key])) {
+                    $months[$key]['bookings']++;
+                }
+            }
         }
 
-        $signupStats = $em->createQueryBuilder()
-            ->select("FUNCTION('DATE_FORMAT', u.createdAt, '%Y-%m') AS ym", 'COUNT(u.id) AS total')
+        $usersSignup = $em->createQueryBuilder()
+            ->select('u')
             ->from(User::class, 'u')
             ->where('u.createdAt >= :start')
-            ->groupBy('ym')
             ->setParameter('start', $start)
-            ->getQuery()->getArrayResult();
+            ->getQuery()
+            ->getResult();
 
-        foreach ($signupStats as $row) {
-            $key = $row['ym'];
-            if (isset($months[$key])) $months[$key]['signups'] = (int)$row['total'];
+        foreach ($usersSignup as $u) {
+            if (!$u instanceof User) {
+                continue;
+            }
+            $created = $u->getCreatedAt();
+            if ($created instanceof DateTimeImmutable) {
+                $key = $created->format('Y-m');
+                if (isset($months[$key])) {
+                    $months[$key]['signups']++;
+                }
+            }
         }
 
         // Liste des comptes (pour la table Admin)

@@ -185,6 +185,25 @@ export async function deleteVehicle(vehicleId) {
   return json(res);
 }
 
+export async function uploadProfilePhoto(file) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const res = await fetch(`${API_BASE}/me/photo`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  return json(res);
+}
+
+export async function deleteProfilePhoto() {
+  const res = await fetch(`${API_BASE}/me/photo`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  return json(res);
+}
+
 /* ---------- Moderation / Admin ---------- */
 export async function fetchModerationReviews(status = "pending") {
   const params = new URLSearchParams();

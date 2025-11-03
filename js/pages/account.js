@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   fetchAccountOverview,
   fetchMyBookings,
   fetchMyRides,
@@ -10,7 +11,10 @@ import {
   saveVehicle,
   deleteVehicle,
   cancelRideAsDriver,
+  uploadProfilePhoto,
+  deleteProfilePhoto,
 } from "../api.js";
+import { clearSession } from "../auth/session.js";
 
 const $welcome = document.getElementById("account-welcome");
 const $profile = document.getElementById("account-profile");
@@ -19,6 +23,14 @@ const $accEmail = document.getElementById("acc-email");
 const $accUserId = document.getElementById("acc-userid");
 const $accRoles = document.getElementById("acc-roles");
 const $accCredits = document.getElementById("acc-credits");
+
+const $photoImg = document.getElementById("acc-photo");
+const $photoPlaceholder = document.getElementById("acc-photo-placeholder");
+const $photoUpload = document.getElementById("acc-photo-upload");
+const $photoRemove = document.getElementById("acc-photo-remove");
+const $photoInput = document.getElementById("acc-photo-input");
+const $photoFeedback = document.getElementById("acc-photo-feedback");
+const $photoNote = document.getElementById("acc-photo-note");
 
 const $driverToggle = document.getElementById("acc-driver-toggle");
 const $driverFeedback = document.getElementById("acc-driver-feedback");
@@ -57,11 +69,179 @@ const $ridesCountPast = document.getElementById("count-rides-past");
 const $btnLogout = document.getElementById("account-logout");
 const $btnRefresh = document.getElementById("account-refresh");
 
+const MAX_PHOTO_MB = 5;
+
+const API_ROOT = (() => {
+  try {
+    const base = new URL(API_BASE);
+    base.pathname = base.pathname.replace(/\/api\/?$/, "");
+    return `${base.origin}${base.pathname.replace(/\/$/, "")}`;
+  } catch (error) {
+    console.error("Unable to derive API root from API_BASE", error);
+    return "";
+  }
+})();
+
 const state = {
   user: null,
-  preferences: { allowSmoker: false, allowAnimals: false, musicStyle: null },
+  preferences: {
+    allowSmoker: false,
+    allowAnimals: false,
+    musicStyle: null,
+  },
   vehicles: [],
 };
+
+/* ---------- Photo de profil ---------- */
+
+function setPhotoFeedback(message = "", isError = false) {
+  if (!$photoFeedback) return;
+  $photoFeedback.textContent = message;
+  $photoFeedback.classList.toggle("text-danger", Boolean(message) && isError);
+  $photoFeedback.classList.toggle("text-muted", !message || !isError);
+}
+
+function resolvePhotoUrl(photo) {
+  if (!photo) return null;
+  if (/^data:/i.test(photo) || /^https?:\/\//i.test(photo)) {
+    return photo;
+  }
+  const trimmed = photo.startsWith("/") ? photo : `/${photo}`;
+  return API_ROOT ? `${API_ROOT}${trimmed}` : trimmed;
+}
+
+function updatePhotoUI(photoUrl) {
+  const resolved = resolvePhotoUrl(photoUrl);
+  const hasPhoto = Boolean(resolved);
+
+  if ($photoImg) {
+    if (hasPhoto) {
+      $photoImg.src = resolved;
+      $photoImg.style.display = "";
+    } else {
+      $photoImg.src = "";
+      $photoImg.style.display = "none";
+    }
+  }
+
+  if ($photoPlaceholder) {
+    $photoPlaceholder.style.display = hasPhoto ? "none" : "";
+  }
+
+  if ($photoUpload) {
+    $photoUpload.textContent = hasPhoto ? "Modifier la photo" : "Ajouter une photo";
+  }
+
+  if ($photoRemove) {
+    $photoRemove.style.display = hasPhoto ? "" : "none";
+    $photoRemove.disabled = !hasPhoto;
+  }
+
+  if ($photoNote) {
+    $photoNote.textContent = hasPhoto
+      ? `Photo enregistrée. Formats recommandés : JPG ou PNG - ${MAX_PHOTO_MB} Mo max.`
+      : `Formats acceptés : JPG ou PNG - ${MAX_PHOTO_MB} Mo maximum.`;
+  }
+}
+
+updatePhotoUI(null);
+
+function previewLocalPhoto(file) {
+  if (!file || !$photoImg) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const dataUrl = event.target?.result;
+    if (typeof dataUrl === "string") {
+      $photoImg.src = dataUrl;
+      $photoImg.style.display = "";
+      if ($photoPlaceholder) {
+        $photoPlaceholder.style.display = "none";
+      }
+      if ($photoUpload) {
+        $photoUpload.textContent = "Modifier la photo";
+      }
+      if ($photoRemove) {
+        $photoRemove.style.display = "";
+        $photoRemove.disabled = false;
+      }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+$photoUpload?.addEventListener("click", () => {
+  $photoInput?.click();
+});
+
+$photoInput?.addEventListener("change", async () => {
+  if (!$photoInput?.files?.length) return;
+  const file = $photoInput.files[0];
+
+  setPhotoFeedback("");
+
+  if (file.type && !file.type.startsWith("image/")) {
+    setPhotoFeedback("Le fichier doit etre une image (JPG ou PNG).", true);
+    $photoInput.value = "";
+    return;
+  }
+
+  if (file.size && file.size > MAX_PHOTO_MB * 1024 * 1024) {
+    setPhotoFeedback(`Image trop volumineuse (${MAX_PHOTO_MB} Mo max).`, true);
+    $photoInput.value = "";
+    return;
+  }
+
+  const previousPhoto = state.user?.photo ?? null;
+  previewLocalPhoto(file);
+  setPhotoFeedback("Envoi en cours...");
+
+  try {
+    const response = await uploadProfilePhoto(file);
+    const photo = response?.photo ?? null;
+    if (state.user) {
+      state.user.photo = photo;
+    }
+    updatePhotoUI(photo);
+    setPhotoFeedback("Photo mise a jour.");
+  } catch (error) {
+    console.error(error);
+    updatePhotoUI(previousPhoto);
+    const message =
+      typeof error?.message === "string" && error.message.trim()
+        ? error.message
+        : "Echec de l'envoi de la photo (formats JPG ou PNG, 5 Mo maximum).";
+    setPhotoFeedback(message, true);
+  } finally {
+    if ($photoInput) {
+      $photoInput.value = "";
+    }
+  }
+});
+
+$photoRemove?.addEventListener("click", async () => {
+  if (!state.user?.photo) return;
+  if (!window.confirm("Supprimer la photo de profil ?")) return;
+
+  setPhotoFeedback("Suppression en cours...");
+
+  try {
+    await deleteProfilePhoto();
+    if (state.user) {
+      state.user.photo = null;
+    }
+    updatePhotoUI(null);
+    setPhotoFeedback("Photo supprimée.");
+  } catch (error) {
+    console.error(error);
+    const message =
+      typeof error?.message === "string" && error.message.trim()
+        ? error.message
+        : "Échec de la suppression de la photo.";
+    setPhotoFeedback(message, true);
+  }
+});
+
+/* ---------- Helpers dates / affichage ---------- */
 
 function parseDate(value) {
   if (!value) return null;
@@ -69,42 +249,77 @@ function parseDate(value) {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
-function isPast(value) {
-  const d = parseDate(value);
-  return d ? d.getTime() < Date.now() : false;
+
+function formatDateTime(value) {
+  const date = parseDate(value);
+  if (!date) {
+    return value ?? "";
+  }
+  try {
+    return date.toLocaleString("fr-FR", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch (error) {
+    console.error("Unable to format date", error);
+    return date.toISOString();
+  }
 }
+
+function isPast(value) {
+  const date = parseDate(value);
+  return date ? date.getTime() < Date.now() : false;
+}
+
 function sortByDateAsc(list, getter) {
   return [...list].sort((a, b) => {
-    const da = parseDate(getter(a))?.getTime() ?? 0;
-    const db = parseDate(getter(b))?.getTime() ?? 0;
-    return da - db;
+    const timeA = parseDate(getter(a))?.getTime() ?? 0;
+    const timeB = parseDate(getter(b))?.getTime() ?? 0;
+    return timeA - timeB;
   });
 }
+
 function formatPrice(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? `${n.toFixed(2)} €` : (value != null ? `${value} €` : "");
+  const amount = Number(value);
+  if (Number.isFinite(amount)) {
+    return `${amount.toFixed(2)} €`;
+  }
+  if (value == null) {
+    return "";
+  }
+  return `${value} €`;
 }
+
 function badge(text) {
-  const t = (text || "").toLowerCase();
-  const variant = t === "open" || t === "confirmed" ? "success" :
-                  t === "cancelled" || t === "canceled" ? "danger" : "secondary";
+  const normalized = (text || "").toLowerCase();
+  const variant =
+    normalized === "open" || normalized === "confirmed"
+      ? "success"
+      : normalized === "cancelled" || normalized === "canceled"
+      ? "danger"
+      : "secondary";
   return `<span class="badge text-bg-${variant}">${text || "-"}</span>`;
 }
 
-/* -- Vehicles --*/
-function vehicleSeatsOf(v) {
-  return (v.seatsTotal ?? v.seats) ?? 0;
+/* ---------- Véhicules ---------- */
+
+function vehicleSeatsOf(vehicle) {
+  const seats = vehicle?.seatsTotal ?? vehicle?.seats;
+  return Number.isFinite(Number(seats)) ? Number(seats) : 0;
 }
 
-function vehicleCard(v) {
-  const label = `${v.brand ?? ""} ${v.model ?? ""}`.trim() || "Sans nom";
+function vehicleCard(vehicle) {
+  const label = `${vehicle?.brand ?? ""} ${vehicle?.model ?? ""}`.trim() || "Sans nom";
   const details = [
-    vehicleSeatsOf(v) ? `${vehicleSeatsOf(v)} places` : null,
-    v.energy || null,
-    v.eco ? "Éco" : null,
-    v.color || null,
-    v.plate || null,
-  ].filter(Boolean).join(" • ");
+    vehicleSeatsOf(vehicle) ? `${vehicleSeatsOf(vehicle)} places` : null,
+    vehicle?.energy || null,
+    vehicle?.eco ? "Éco" : null,
+    vehicle?.color || null,
+    vehicle?.plate || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return `
     <div class="border rounded p-2 mb-2">
       <div class="d-flex justify-content-between align-items-start gap-2">
@@ -113,8 +328,8 @@ function vehicleCard(v) {
           <div class="small text-muted">${details || "Aucun détail"}</div>
         </div>
         <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-primary js-vehicle-edit" data-id="${v.id}">Modifier</button>
-          <button class="btn btn-sm btn-outline-danger js-vehicle-delete" data-id="${v.id}">Supprimer</button>
+          <button class="btn btn-sm btn-outline-primary js-vehicle-edit" data-id="${vehicle.id}">Modifier</button>
+          <button class="btn btn-sm btn-outline-danger js-vehicle-delete" data-id="${vehicle.id}">Supprimer</button>
         </div>
       </div>
     </div>
@@ -122,71 +337,80 @@ function vehicleCard(v) {
 }
 
 function renderVehicles() {
+  if (!$vehiclesList) return;
+
   if (!Array.isArray(state.vehicles) || state.vehicles.length === 0) {
     $vehiclesList.innerHTML = `<div class="text-muted">Aucun véhicule enregistré.</div>`;
     return;
   }
+
   $vehiclesList.innerHTML = state.vehicles.map(vehicleCard).join("");
 
-  document.querySelectorAll(".js-vehicle-edit").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.dataset.id);
-      const vehicle = state.vehicles.find((v) => v.id === id);
+  $vehiclesList.querySelectorAll(".js-vehicle-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = Number(button.dataset.id);
+      const vehicle = state.vehicles.find((item) => item.id === id);
       if (!vehicle) return;
-      $vehicleId.value = vehicle.id;
-      $vehicleBrand.value = vehicle.brand ?? "";
-      $vehicleModel.value = vehicle.model ?? "";
-      $vehicleSeats.value = vehicleSeatsOf(vehicle) || 4;
-      $vehicleEnergy.value = vehicle.energy ?? "";
-      $vehicleColor.value = vehicle.color ?? "";
-      $vehiclePlate.value = vehicle.plate ?? "";
-      $vehicleEco.checked = Boolean(vehicle.eco);
-      $vehicleFeedback.textContent = "Modification d'un véhicule existant.";
+
+      if ($vehicleId) $vehicleId.value = vehicle.id ?? "";
+      if ($vehicleBrand) $vehicleBrand.value = vehicle.brand ?? "";
+      if ($vehicleModel) $vehicleModel.value = vehicle.model ?? "";
+      if ($vehicleSeats) $vehicleSeats.value = vehicleSeatsOf(vehicle) || 4;
+      if ($vehicleEnergy) $vehicleEnergy.value = vehicle.energy ?? "";
+      if ($vehicleColor) $vehicleColor.value = vehicle.color ?? "";
+      if ($vehiclePlate) $vehiclePlate.value = vehicle.plate ?? "";
+      if ($vehicleEco) $vehicleEco.checked = Boolean(vehicle.eco);
+      if ($vehicleFeedback) $vehicleFeedback.textContent = "Modification d'un véhicule existant.";
     });
   });
 
-  document.querySelectorAll(".js-vehicle-delete").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = Number(btn.dataset.id);
+  $vehiclesList.querySelectorAll(".js-vehicle-delete").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = Number(button.dataset.id);
       if (!Number.isFinite(id)) return;
       if (!window.confirm("Supprimer ce véhicule ?")) return;
-      btn.disabled = true;
+
+      button.disabled = true;
       try {
         await deleteVehicle(id);
         await reloadVehicles();
-        $vehicleFeedback.textContent = "Véhicule supprimé.";
-      } catch (e) {
-        console.error(e);
-        $vehicleFeedback.textContent = "Erreur lors de la suppression.";
+        if ($vehicleFeedback) $vehicleFeedback.textContent = "Véhicule supprimé.";
+      } catch (error) {
+        console.error(error);
+        if ($vehicleFeedback) $vehicleFeedback.textContent = "Erreur lors de la suppression du véhicule.";
       } finally {
-        btn.disabled = false;
+        button.disabled = false;
       }
     });
   });
 }
 
 function resetVehicleForm() {
-  $vehicleId.value = "";
-  $vehicleBrand.value = "";
-  $vehicleModel.value = "";
-  $vehicleSeats.value = "4";
-  $vehicleEnergy.value = "";
-  $vehicleColor.value = "";
-  $vehiclePlate.value = "";
-  $vehicleEco.checked = false;
-  $vehicleFeedback.textContent = "";
+  if ($vehicleId) $vehicleId.value = "";
+  if ($vehicleBrand) $vehicleBrand.value = "";
+  if ($vehicleModel) $vehicleModel.value = "";
+  if ($vehicleSeats) $vehicleSeats.value = "4";
+  if ($vehicleEnergy) $vehicleEnergy.value = "";
+  if ($vehicleColor) $vehicleColor.value = "";
+  if ($vehiclePlate) $vehiclePlate.value = "";
+  if ($vehicleEco) $vehicleEco.checked = false;
+  if ($vehicleFeedback) $vehicleFeedback.textContent = "";
 }
 
-/* -- Bookings / Rides -- */
+/* ---------- Réservations & trajets ---------- */
+
 function bookingCard(booking) {
-  const canCancel = !isPast(booking.startAt) && (!booking.status || booking.status === "confirmed");
+  const canCancel =
+    !isPast(booking.startAt) &&
+    (!booking.status || booking.status === "confirmed");
+
   return `
     <div class="card mb-2 shadow-sm">
       <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <div class="fw-semibold">${booking.from} &rarr; ${booking.to}</div>
           <div class="small text-muted">
-            ${booking.startAt ?? ""} • ${booking.seats} siège(s) • statut : ${booking.status || "-"}
+            ${formatDateTime(booking.startAt)} · ${booking.seats} siège(s) · statut : ${booking.status || "-"}
           </div>
           <a class="btn btn-link btn-sm p-0 mt-1" href="/ride?id=${booking.rideId}" data-link>Voir le détail</a>
         </div>
@@ -199,14 +423,17 @@ function bookingCard(booking) {
 }
 
 function driverRideCard(ride, canCancel) {
-  const vehicle = ride.vehicle ? `${ride.vehicle.brand ?? ""} ${ride.vehicle.model ?? ""}`.trim() : "";
+  const vehicle = ride.vehicle
+    ? `${ride.vehicle.brand ?? ""} ${ride.vehicle.model ?? ""}`.trim()
+    : "";
+
   return `
     <div class="card mb-2 shadow-sm">
       <div class="card-body d-flex flex-wrap justify-content-between gap-2">
         <div>
           <div class="fw-semibold">${ride.from} &rarr; ${ride.to}</div>
           <div class="small text-muted">
-            ${ride.startAt ?? ""} • ${ride.seatsLeft}/${ride.seatsTotal} places • ${vehicle}
+            ${formatDateTime(ride.startAt)} · ${ride.seatsLeft}/${ride.seatsTotal} places${vehicle ? ` · ${vehicle}` : ""}
           </div>
           <div class="mt-1">${badge(ride.status)}</div>
           <a class="btn btn-link btn-sm p-0 mt-2" href="/ride?id=${ride.id}" data-link>Voir le détail</a>
@@ -221,217 +448,366 @@ function driverRideCard(ride, canCancel) {
 }
 
 function renderList(target, html, emptyText) {
-  target.innerHTML = html && html.trim() !== "" ? html : `<div class="text-muted">${emptyText}</div>`;
+  if (!target) return;
+  target.innerHTML =
+    html && html.trim() !== "" ? html : `<div class="text-muted">${emptyText}</div>`;
 }
+
+/* ---------- Chargements ---------- */
 
 async function reloadVehicles() {
   try {
     const response = await fetchMyVehicles();
-    state.vehicles = response?.auth === false ? [] : (Array.isArray(response?.vehicles) ? response.vehicles : []);
-  } catch (e) {
-    console.error(e);
+    state.vehicles =
+      response?.auth === false
+        ? []
+        : Array.isArray(response?.vehicles)
+        ? response.vehicles
+        : [];
+  } catch (error) {
+    console.error(error);
     state.vehicles = [];
   }
   renderVehicles();
 }
 
 async function renderAccount() {
-  $bookingsFeedback.textContent = "Chargement...";
-  $ridesFeedback.textContent = "Chargement...";
-  $bookingsUpcoming.innerHTML = "";
-  $bookingsPast.innerHTML = "";
-  $ridesUpcoming.innerHTML = "";
-  $ridesPast.innerHTML = "";
+  if ($bookingsFeedback) $bookingsFeedback.textContent = "Chargement...";
+  if ($ridesFeedback) $ridesFeedback.textContent = "Chargement...";
+  if ($bookingsUpcoming) $bookingsUpcoming.innerHTML = "";
+  if ($bookingsPast) $bookingsPast.innerHTML = "";
+  if ($ridesUpcoming) $ridesUpcoming.innerHTML = "";
+  if ($ridesPast) $ridesPast.innerHTML = "";
 
   try {
+    const overviewPromise = fetchAccountOverview().catch((error) => {
+      const message = String(error?.message || "");
+      if (/401|403/.test(message)) {
+        return { auth: false };
+      }
+      throw error;
+    });
+
+    const bookingsPromise = fetchMyBookings().catch((error) => {
+      console.error(error);
+      return null;
+    });
+
+    const ridesPromise = fetchMyRides().catch((error) => {
+      console.error(error);
+      return null;
+    });
+
     const [overview, bookingsData, ridesData] = await Promise.all([
-      fetchAccountOverview().catch((e) => (e.message.includes("401") ? { auth: false } : Promise.reject(e))),
-      fetchMyBookings().catch((e) => { console.error(e); return null; }),
-      fetchMyRides().catch((e) => { console.error(e); return null; }),
+      overviewPromise,
+      bookingsPromise,
+      ridesPromise,
     ]);
 
     if (!overview || overview.auth === false) {
       state.user = null;
-      $profile.classList.add("d-none");
-      $welcome.innerHTML = `<div class="alert alert-warning mb-0">Veuillez vous connecter pour accéder à votre espace.</div>`;
-      $bookingsFeedback.textContent = "";
-      $ridesFeedback.textContent = "";
+      updatePhotoUI(null);
+      setPhotoFeedback("");
+      if ($profile) $profile.classList.add("d-none");
+      if ($welcome) {
+        $welcome.innerHTML =
+          '<div class="alert alert-warning mb-0">Veuillez vous connecter pour accéder à votre espace.</div>';
+      }
+      if ($bookingsFeedback) $bookingsFeedback.textContent = "";
+      if ($ridesFeedback) $ridesFeedback.textContent = "";
+      renderList($bookingsUpcoming, "", "Aucune réservation à venir.");
+      renderList($bookingsPast, "", "Aucune réservation passée.");
+      renderList($ridesUpcoming, "", "Aucun trajet à venir.");
+      renderList($ridesPast, "", "Aucun trajet passé.");
       return;
     }
 
-    state.user = overview.user;
+    state.user = { ...overview.user, photo: overview.user?.photo ?? null };
     state.preferences = overview.preferences ?? state.preferences;
     state.vehicles = overview.vehicles ?? [];
 
-    $accName.textContent = overview.user?.pseudo ?? "Utilisateur";
-    $accEmail.textContent = overview.user?.email ?? "";
-    $accUserId.textContent = `#${overview.user?.id ?? ""}`;
-    $accRoles.textContent = Array.isArray(overview.user?.roles) ? overview.user.roles.join(", ") : "";
-    $accCredits.textContent = overview.user?.credits ?? 0;
-    $profile.classList.remove("d-none");
-    $welcome.innerHTML = `Bonjour <strong>${overview.user?.pseudo ?? "utilisateur"}</strong> !`;
-
-    const driverEnabled = Array.isArray(overview.user?.roles) && overview.user.roles.includes("ROLE_DRIVER");
-    $driverToggle.checked = driverEnabled;
-    $driverFeedback.textContent = "";
-
-    $prefSmoker.checked = Boolean(state.preferences.allowSmoker);
-    $prefAnimals.checked = Boolean(state.preferences.allowAnimals);
-    $prefMusic.value = state.preferences.musicStyle ?? "";
-    $prefsFeedback.textContent = "";
-
+    updatePhotoUI(state.user.photo ?? null);
+    setPhotoFeedback("");
+    resetVehicleForm();
     renderVehicles();
 
+    if ($accName) $accName.textContent = overview.user?.pseudo ?? "Utilisateur";
+    if ($accEmail) $accEmail.textContent = overview.user?.email ?? "";
+    if ($accUserId) $accUserId.textContent = `#${overview.user?.id ?? ""}`;
+    if ($accRoles) {
+      const roles = Array.isArray(overview.user?.roles)
+        ? overview.user.roles.join(", ")
+        : "";
+      $accRoles.textContent = roles;
+    }
+    if ($accCredits) $accCredits.textContent = overview.user?.credits ?? 0;
+
+    if ($profile) $profile.classList.remove("d-none");
+    if ($welcome) {
+      $welcome.innerHTML = `Bonjour <strong>${overview.user?.pseudo ?? "utilisateur"}</strong> !`;
+    }
+
+    const driverEnabled =
+      Array.isArray(overview.user?.roles) &&
+      overview.user.roles.includes("ROLE_DRIVER");
+
+    if ($driverToggle) {
+      $driverToggle.checked = driverEnabled;
+    }
+    if ($driverFeedback) $driverFeedback.textContent = "";
+
+    if ($prefSmoker) $prefSmoker.checked = Boolean(state.preferences.allowSmoker);
+    if ($prefAnimals) $prefAnimals.checked = Boolean(state.preferences.allowAnimals);
+    if ($prefMusic) $prefMusic.value = state.preferences.musicStyle ?? "";
+    if ($prefsFeedback) $prefsFeedback.textContent = "";
+
+    // Réservations (passager)
     if (bookingsData && Array.isArray(bookingsData.bookings)) {
-      const upcoming = sortByDateAsc(bookingsData.bookings.filter((b) => !isPast(b.startAt)), (b) => b.startAt);
-      const past = sortByDateAsc(bookingsData.bookings.filter((b) => isPast(b.startAt)), (b) => b.startAt);
+      const upcoming = sortByDateAsc(
+        bookingsData.bookings.filter((booking) => !isPast(booking.startAt)),
+        (booking) => booking.startAt
+      );
+      const past = sortByDateAsc(
+        bookingsData.bookings.filter((booking) => isPast(booking.startAt)),
+        (booking) => booking.startAt
+      );
 
-      $bookingsCountUpcoming.textContent = String(upcoming.length);
-      $bookingsCountPast.textContent = String(past.length);
+      if ($bookingsCountUpcoming) {
+        $bookingsCountUpcoming.textContent = String(upcoming.length);
+      }
+      if ($bookingsCountPast) {
+        $bookingsCountPast.textContent = String(past.length);
+      }
 
-      renderList($bookingsUpcoming, upcoming.map(bookingCard).join(""), "Aucune réservation à venir.");
-      renderList($bookingsPast, past.map(bookingCard).join(""), "Aucune réservation passée.");
-      $bookingsFeedback.textContent = bookingsData.bookings.length ? "" : "Aucune réservation.";
+      renderList(
+        $bookingsUpcoming,
+        upcoming.map(bookingCard).join(""),
+        "Aucune réservation à venir."
+      );
+      renderList(
+        $bookingsPast,
+        past.map(bookingCard).join(""),
+        "Aucune réservation passée."
+      );
+      if ($bookingsFeedback) {
+        $bookingsFeedback.textContent = bookingsData.bookings.length
+          ? ""
+          : "Aucune réservation.";
+      }
 
-      document.querySelectorAll(".js-unbook").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const id = Number(btn.dataset.id);
-          if (!Number.isFinite(id)) return;
-          const old = btn.textContent;
-          btn.disabled = true;
-          btn.textContent = "...";
-          try {
-            await unbookRide(id);
-            await renderAccount();
-          } catch (e) {
-            console.error(e);
-            alert("Échec de l'annulation.");
-          } finally {
-            btn.disabled = false;
-            btn.textContent = old;
-          }
-        });
-      });
-    } else {
+      $bookingsUpcoming
+        ?.querySelectorAll(".js-unbook")
+        .forEach((button) => attachUnbookHandler(button));
+      $bookingsPast
+        ?.querySelectorAll(".js-unbook")
+        .forEach((button) => attachUnbookHandler(button));
+    } else if ($bookingsFeedback) {
       $bookingsFeedback.textContent = "Impossible de charger les réservations.";
     }
 
+    // Trajets conducteur
     if (Array.isArray(ridesData)) {
-      const upcomingR = sortByDateAsc(ridesData.filter((r) => !isPast(r.startAt)), (r) => r.startAt);
-      const pastR = sortByDateAsc(ridesData.filter((r) => isPast(r.startAt)), (r) => r.startAt);
+      const upcomingRides = sortByDateAsc(
+        ridesData.filter((ride) => !isPast(ride.startAt)),
+        (ride) => ride.startAt
+      );
+      const pastRides = sortByDateAsc(
+        ridesData.filter((ride) => isPast(ride.startAt)),
+        (ride) => ride.startAt
+      );
 
-      $ridesCountUpcoming.textContent = String(upcomingR.length);
-      $ridesCountPast.textContent = String(pastR.length);
+      if ($ridesCountUpcoming) {
+        $ridesCountUpcoming.textContent = String(upcomingRides.length);
+      }
+      if ($ridesCountPast) {
+        $ridesCountPast.textContent = String(pastRides.length);
+      }
 
-      renderList($ridesUpcoming, upcomingR.map((r) => driverRideCard(r, r.status === "open")).join(""), "Aucun trajet à venir.");
-      renderList($ridesPast, pastR.map((r) => driverRideCard(r, false)).join(""), "Aucun trajet passé.");
-      $ridesFeedback.textContent = ridesData.length ? "" : "Aucun trajet conducteur.";
+      renderList(
+        $ridesUpcoming,
+        upcomingRides
+          .map((ride) => driverRideCard(ride, ride.status === "open"))
+          .join(""),
+        "Aucun trajet à venir."
+      );
+      renderList(
+        $ridesPast,
+        pastRides.map((ride) => driverRideCard(ride, false)).join(""),
+        "Aucun trajet passé."
+      );
+      if ($ridesFeedback) {
+        $ridesFeedback.textContent = ridesData.length
+          ? ""
+          : "Aucun trajet conducteur.";
+      }
 
-      document.querySelectorAll(".js-cancel-ride").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const id = Number(btn.dataset.id);
-          if (!Number.isFinite(id)) return;
-          if (!window.confirm("Annuler ce trajet ? Les passagers seront remboursés.")) return;
-          const old = btn.textContent;
-          btn.disabled = true;
-          btn.textContent = "...";
-          try {
-            await cancelRideAsDriver(id);
-            await renderAccount();
-          } catch (e) {
-            console.error(e);
-            alert("Échec de l'annulation du trajet.");
-          } finally {
-            btn.disabled = false;
-            btn.textContent = old;
-          }
-        });
-      });
-    } else {
+      $ridesUpcoming
+        ?.querySelectorAll(".js-cancel-ride")
+        .forEach((button) => attachCancelRideHandler(button));
+    } else if ($ridesFeedback) {
       $ridesFeedback.textContent = "Impossible de charger les trajets conducteur.";
     }
-  } catch (e) {
-    console.error(e);
-    $welcome.innerHTML = `<div class="alert alert-danger mb-0">Erreur lors du chargement du compte.</div>`;
+  } catch (error) {
+    console.error(error);
+    if ($welcome) {
+      $welcome.innerHTML =
+        '<div class="alert alert-danger mb-0">Erreur lors du chargement du compte.</div>';
+    }
   }
 }
 
-/* -- actions -- */
+function attachUnbookHandler(button) {
+  button.addEventListener("click", async () => {
+    const id = Number(button.dataset.id);
+    if (!Number.isFinite(id)) return;
+
+    const previous = button.textContent;
+    button.disabled = true;
+    button.textContent = "...";
+
+    try {
+      await unbookRide(id);
+      await renderAccount();
+    } catch (error) {
+      console.error(error);
+      window.alert("Échec de l'annulation de la réservation.");
+    } finally {
+      button.disabled = false;
+      button.textContent = previous;
+    }
+  });
+}
+
+function attachCancelRideHandler(button) {
+  button.addEventListener("click", async () => {
+    const id = Number(button.dataset.id);
+    if (!Number.isFinite(id)) return;
+    if (
+      !window.confirm(
+        "Annuler ce trajet ? Les passagers seront remboursés automatiquement."
+      )
+    ) {
+      return;
+    }
+
+    const previous = button.textContent;
+    button.disabled = true;
+    button.textContent = "...";
+
+    try {
+      await cancelRideAsDriver(id);
+      await renderAccount();
+    } catch (error) {
+      console.error(error);
+      window.alert("Échec de l'annulation du trajet.");
+    } finally {
+      button.disabled = false;
+      button.textContent = previous;
+    }
+  });
+}
+
+/* ---------- Actions UI ---------- */
+
 $driverToggle?.addEventListener("change", async () => {
   if (!state.user) return;
+
   const targetValue = $driverToggle.checked;
   $driverToggle.disabled = true;
-  $driverFeedback.textContent = "Enregistrement...";
+  if ($driverFeedback) $driverFeedback.textContent = "Enregistrement...";
+
   try {
-    const res = await updateDriverRole({ driver: targetValue });
-    if (Array.isArray(res?.roles)) {
-      state.user.roles = res.roles;
-      $accRoles.textContent = res.roles.join(", ");
+    const response = await updateDriverRole({ driver: targetValue });
+    if (Array.isArray(response?.roles)) {
+      state.user.roles = response.roles;
+      if ($accRoles) {
+        $accRoles.textContent = response.roles.join(", ");
+      }
     }
-    $driverFeedback.textContent = "Rôle mis à jour.";
-  } catch (e) {
-    console.error(e);
+    if ($driverFeedback) $driverFeedback.textContent = "Rôle mis à jour.";
+  } catch (error) {
+    console.error(error);
     $driverToggle.checked = !targetValue;
-    $driverFeedback.textContent = "Impossible de mettre à jour le rôle.";
+    if ($driverFeedback) {
+      $driverFeedback.textContent = "Impossible de mettre à jour le rôle.";
+    }
   } finally {
     $driverToggle.disabled = false;
   }
 });
 
-$prefsForm?.addEventListener("submit", async (ev) => {
-  ev.preventDefault();
+$prefsForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
   if (!state.user) return;
-  $prefsFeedback.textContent = "Enregistrement...";
+  if ($prefsFeedback) $prefsFeedback.textContent = "Enregistrement...";
+
+  const payload = {
+    allowSmoker: Boolean($prefSmoker?.checked),
+    allowAnimals: Boolean($prefAnimals?.checked),
+    musicStyle: $prefMusic?.value.trim() || null,
+  };
+
   try {
-    const payload = {
-      allowSmoker: $prefSmoker.checked,
-      allowAnimals: $prefAnimals.checked,
-      musicStyle: $prefMusic.value.trim() || null,
-    };
-    const res = await saveDriverPreferences(payload);
-    state.preferences = res?.preferences ?? payload;
-    $prefsFeedback.textContent = "Préférences enregistrées.";
-  } catch (e) {
-    console.error(e);
-    $prefsFeedback.textContent = "Erreur lors de l’enregistrement.";
+    const response = await saveDriverPreferences(payload);
+    state.preferences = response?.preferences ?? payload;
+    if ($prefsFeedback) $prefsFeedback.textContent = "Préférences enregistrées.";
+  } catch (error) {
+    console.error(error);
+    if ($prefsFeedback) $prefsFeedback.textContent = "Erreur lors de l'enregistrement.";
   }
 });
 
-$vehicleForm?.addEventListener("submit", async (ev) => {
-  ev.preventDefault();
+$vehicleForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
   if (!state.user) return;
 
   const payload = {
-    id: $vehicleId.value ? Number($vehicleId.value) : undefined,
-    brand: $vehicleBrand.value.trim(),
-    model: $vehicleModel.value.trim(),
-    seats: Number($vehicleSeats.value) || 4,
-    energy: $vehicleEnergy.value.trim() || "electric",
-    color: $vehicleColor.value.trim() || null,
-    plate: $vehiclePlate.value.trim() || null,
-    eco: $vehicleEco.checked,
+    id: $vehicleId?.value ? Number($vehicleId.value) : undefined,
+    brand: $vehicleBrand?.value.trim() ?? "",
+    model: $vehicleModel?.value.trim() ?? "",
+    seats: Number($vehicleSeats?.value) || 4,
+    energy: $vehicleEnergy?.value.trim() || "electric",
+    color: $vehicleColor?.value.trim() || null,
+    plate: $vehiclePlate?.value.trim() || null,
+    eco: Boolean($vehicleEco?.checked),
   };
 
-  $vehicleFeedback.textContent = "Enregistrement...";
+  if ($vehicleFeedback) $vehicleFeedback.textContent = "Enregistrement...";
+
   try {
     await saveVehicle(payload);
     resetVehicleForm();
     await reloadVehicles();
-    $vehicleFeedback.textContent = "Véhicule enregistré.";
-  } catch (e) {
-    console.error(e);
-    $vehicleFeedback.textContent = "Erreur lors de l'enregistrement.";
+    if ($vehicleFeedback) $vehicleFeedback.textContent = "Véhicule enregistré.";
+  } catch (error) {
+    console.error(error);
+    if ($vehicleFeedback) $vehicleFeedback.textContent = "Erreur lors de l'enregistrement du véhicule.";
   }
 });
 
-$vehicleReset?.addEventListener("click", () => resetVehicleForm());
+$vehicleReset?.addEventListener("click", () => {
+  resetVehicleForm();
+});
+
 $btnLogout?.addEventListener("click", async () => {
   try {
     await logout();
-    if (typeof window.navigate === "function") window.navigate("/signin");
-    else window.location.href = "/signin";
-  } catch (e) { console.error(e); }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    clearSession();
+    if (typeof window.navigate === "function") {
+      window.navigate("/signin");
+    } else {
+      window.location.href = "/signin";
+    }
+  }
 });
-$btnRefresh?.addEventListener("click", () => renderAccount());
+
+$btnRefresh?.addEventListener("click", () => {
+  renderAccount();
+});
+
+/* ---------- Init ---------- */
 
 renderAccount();

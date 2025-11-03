@@ -95,6 +95,7 @@ class AuthController extends AbstractController
                 'id'     => $user->getId(),
                 'email'  => $user->getEmail(),
                 'pseudo' => $user->getPseudo(),
+                'photo'  => $user->getProfilePhoto(),
                 'roles'  => $user->getRoles(),
                 'credits'=> $user->getCreditsBalance(),
             ],
@@ -127,6 +128,7 @@ class AuthController extends AbstractController
                     'id'        => $user->getId(),
                     'email'     => $user->getEmail(),
                     'pseudo'    => $user->getPseudo(),
+                    'photo'     => $user->getProfilePhoto(),
                     'roles'     => $user->getRoles(),
                     'credits'   => $user->getCreditsBalance(),
                     'preferences' => $prefs,
@@ -149,6 +151,7 @@ class AuthController extends AbstractController
     public function logout(Request $request): JsonResponse
     {
         $request->getSession()->invalidate();
+        $this->tokenStorage->setToken(null);
         return $this->json(['ok' => true]);
     }
 
@@ -222,6 +225,7 @@ class AuthController extends AbstractController
                 'id'     => $user->getId(),
                 'email'  => $user->getEmail(),
                 'pseudo' => $user->getPseudo(),
+                'photo'  => $user->getProfilePhoto(),
                 'roles'  => $user->getRoles(),
                 'credits'=> $user->getCreditsBalance(),
             ],

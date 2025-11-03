@@ -2,25 +2,89 @@
   <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
     <h2 class="mb-0">Mon profil</h2>
     <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary btn-sm" href="/signin" data-link data-show-disconnected>Se connecter</a>
-      <button id="account-refresh" class="btn btn-outline-primary btn-sm" data-show-connected>Actualiser</button>
-      <button id="account-logout" class="btn btn-outline-danger btn-sm" data-show-connected>Se déconnecter</button>
-      <a class="btn btn-primary btn-sm" href="/new-rides" data-link data-show-connected>Créer un trajet</a>
+      <a class="btn btn-outline-secondary btn-sm" href="/signin" data-link data-show-disconnected>
+        Se connecter
+      </a>
+      <button id="account-refresh" class="btn btn-outline-primary btn-sm" data-show-connected>
+        Actualiser
+      </button>
+      <button id="account-logout" class="btn btn-outline-danger btn-sm" data-show-connected>
+        Se déconnecter
+      </button>
+      <a class="btn btn-primary btn-sm" href="/new-rides" data-link data-show-connected>
+        Créer un trajet
+      </a>
     </div>
   </div>
 
   <div id="account-welcome" class="mb-3"></div>
 
   <div id="account-profile" class="card mb-4 shadow-sm d-none">
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
-      <div>
-        <div class="fw-semibold h5 mb-1" id="acc-name">Utilisateur</div>
-        <div class="text-muted small" id="acc-email"></div>
-        <div class="small text-muted" id="acc-roles"></div>
-      </div>
-      <div class="text-end">
-        <span class="badge text-bg-secondary" id="acc-userid">#</span>
-        <div class="fw-semibold mt-2">Crédits: <span id="acc-credits">0</span></div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-start gap-3">
+        <!-- Bloc photo de profil -->
+        <div class="d-flex flex-column align-items-center gap-2">
+          <img
+            id="acc-photo"
+            src=""
+            alt="Photo de profil"
+            class="rounded-circle border"
+            style="width:96px;height:96px;object-fit:cover;display:none;"
+          >
+
+          <div
+            id="acc-photo-placeholder"
+            class="rounded-circle border d-flex align-items-center justify-content-center text-muted small"
+            style="width:96px;height:96px;"
+          >
+            Ajouter une photo
+          </div>
+
+          <div class="d-flex gap-2">
+            <button id="acc-photo-upload" class="btn btn-sm btn-outline-primary">
+              Ajouter une photo
+            </button>
+            <button
+              id="acc-photo-remove"
+              class="btn btn-sm btn-outline-danger"
+              style="display:none;"
+            >
+              Supprimer
+            </button>
+          </div>
+
+          <div
+            id="acc-photo-feedback"
+            class="small text-muted text-center"
+            style="max-width:140px;"
+          ></div>
+
+          <div
+            id="acc-photo-note"
+            class="small text-muted text-center"
+            style="max-width:160px;"
+          >
+            Formats acceptés : JPG ou PNG - 5 Mo maximum.
+          </div>
+
+          <input type="file" id="acc-photo-input" accept="image/*" class="d-none">
+        </div>
+
+        <!-- Infos profil -->
+        <div class="flex-grow-1 d-flex flex-wrap justify-content-between align-items-start gap-3">
+          <div>
+            <div class="fw-semibold h5 mb-1" id="acc-name">Utilisateur</div>
+            <div class="text-muted small" id="acc-email"></div>
+            <div class="small text-muted" id="acc-roles"></div>
+          </div>
+          <div class="text-end">
+            <span class="badge text-bg-secondary" id="acc-userid">#</span>
+            <div class="fw-semibold mt-2">
+              Crédits : <span id="acc-credits">0</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -57,9 +121,15 @@
             </div>
             <div>
               <label class="form-label small" for="acc-pref-music">Style musical</label>
-              <input class="form-control form-control-sm" id="acc-pref-music" placeholder="Ambiance à bord">
+              <input
+                class="form-control form-control-sm"
+                id="acc-pref-music"
+                placeholder="Ambiance à bord"
+              >
             </div>
-            <button type="submit" class="btn btn-outline-primary btn-sm align-self-start">Enregistrer</button>
+            <button type="submit" class="btn btn-outline-primary btn-sm align-self-start">
+              Enregistrer
+            </button>
             <div id="acc-prefs-feedback" class="small text-muted"></div>
           </form>
         </div>
@@ -73,40 +143,71 @@
           <div id="acc-vehicles-list" class="mb-3 small text-muted">Chargement...</div>
           <form id="acc-vehicle-form" class="row g-2">
             <input type="hidden" id="acc-vehicle-id">
+
             <div class="col-12">
               <label class="form-label small" for="acc-vehicle-brand">Marque</label>
               <input class="form-control form-control-sm" id="acc-vehicle-brand" required>
             </div>
+
             <div class="col-12">
               <label class="form-label small" for="acc-vehicle-model">Modèle</label>
               <input class="form-control form-control-sm" id="acc-vehicle-model" required>
             </div>
+
             <div class="col-6">
               <label class="form-label small" for="acc-vehicle-seats">Places</label>
-              <input class="form-control form-control-sm" id="acc-vehicle-seats" type="number" min="1" value="4">
+              <input
+                class="form-control form-control-sm"
+                id="acc-vehicle-seats"
+                type="number"
+                min="1"
+                value="4"
+              >
             </div>
+
             <div class="col-6">
-              <label class="form-label small" for="acc-vehicle-energy">Energie</label>
-              <input class="form-control form-control-sm" id="acc-vehicle-energy" placeholder="electric">
+              <label class="form-label small" for="acc-vehicle-energy">Énergie</label>
+              <input
+                class="form-control form-control-sm"
+                id="acc-vehicle-energy"
+                placeholder="electric"
+              >
             </div>
+
             <div class="col-6">
               <label class="form-label small" for="acc-vehicle-color">Couleur</label>
-              <input class="form-control form-control-sm" id="acc-vehicle-color" placeholder="bleu">
+              <input
+                class="form-control form-control-sm"
+                id="acc-vehicle-color"
+                placeholder="bleu"
+              >
             </div>
+
             <div class="col-6">
               <label class="form-label small" for="acc-vehicle-plate">Immat.</label>
-              <input class="form-control form-control-sm" id="acc-vehicle-plate" placeholder="AA-123-BB">
+              <input
+                class="form-control form-control-sm"
+                id="acc-vehicle-plate"
+                placeholder="AA-123-BB"
+              >
             </div>
+
             <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="acc-vehicle-eco">
-                <label class="form-check-label small" for="acc-vehicle-eco">Véhicule éco</label>
+                <label class="form-check-label small" for="acc-vehicle-eco">
+                  Véhicule éco
+                </label>
               </div>
             </div>
+
             <div class="col-12 d-flex gap-2">
               <button type="submit" class="btn btn-sm btn-primary">Enregistrer</button>
-              <button type="button" id="acc-vehicle-reset" class="btn btn-sm btn-outline-secondary">Annuler</button>
+              <button type="button" id="acc-vehicle-reset" class="btn btn-sm btn-outline-secondary">
+                Annuler
+              </button>
             </div>
+
             <div id="acc-vehicle-feedback" class="small text-muted"></div>
           </form>
         </div>
@@ -114,10 +215,11 @@
     </div>
   </div>
 
+  <!-- Réservations -->
   <div class="d-flex justify-content-between align-items-baseline">
     <h3 class="h5 mt-2">Mes réservations</h3>
     <div class="small text-muted">
-      <span id="count-bookings-upcoming">0</span> à venir.
+      <span id="count-bookings-upcoming">0</span> à venir â
       <span id="count-bookings-past">0</span> passées
     </div>
   </div>
@@ -127,14 +229,14 @@
   <h4 class="h6 mt-3">À venir</h4>
   <div id="account-bookings-upcoming" class="mb-3"></div>
 
-  <h4 class="h6 mt-3">Passés</h4>
+  <h4 class="h6 mt-3">Passées</h4>
   <div id="account-bookings-past" class="mb-5"></div>
 
+  <!-- Trajets conducteur -->
   <div class="d-flex justify-content-between align-items-baseline">
     <h3 class="h5 mt-2">Mes trajets (conducteur)</h3>
     <div class="small text-muted">
-      <span id="count-rides-upcoming">0</span> à venir.
-      &ndash;
+      <span id="count-rides-upcoming">0</span> à venir â
       <span id="count-rides-past">0</span> passés
     </div>
   </div>
