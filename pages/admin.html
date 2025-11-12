@@ -57,6 +57,26 @@
 
   <section>
     <h3 class="h5 mb-2">Gestion des comptes</h3>
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h4 class="h6">Créer un compte employé</h4>
+        <form id="admin-employee-form" class="row g-2">
+          <div class="col-md-4">
+            <input type="email" class="form-control form-control-sm" id="admin-employee-email" placeholder="email@exemple.com" required>
+          </div>
+          <div class="col-md-3">
+            <input type="text" class="form-control form-control-sm" id="admin-employee-pseudo" placeholder="Pseudo" required>
+          </div>
+          <div class="col-md-3">
+            <input type="password" class="form-control form-control-sm" id="admin-employee-password" placeholder="Mot de passe (8 caractères min)" minlength="8" required>
+          </div>
+          <div class="col-md-auto">
+            <button class="btn btn-primary btn-sm" type="submit">Créer</button>
+          </div>
+        </form>
+        <div class="form-text mt-1">Communiquez le mot de passe provisoire à l'employé pour sa première connexion.</div>
+      </div>
+    </div>
     <div id="admin-users-feedback" class="text-muted mb-2">Chargement des comptes...</div>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">

@@ -282,6 +282,16 @@ export async function fetchRideIssues() {
   return json(res);
 }
 
+export async function createEmployeeAccount({ email, pseudo, password }) {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, pseudo, password }),
+  });
+  return json(res);
+}
+
 /* ---------- My bookings / rides ---------- */
 export async function fetchMyBookings() {
   const res = await fetch(`${API_BASE}/me/bookings`, {

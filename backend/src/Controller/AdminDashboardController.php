@@ -11,11 +11,14 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route('/api/admin', name: 'api_admin_')]
 class AdminDashboardController extends AbstractController
 {
+    private const PLATFORM_FEE = 2;
+
     #[Route('/metrics', name: 'metrics', methods: ['GET'])]
     public function metrics(Request $request, EntityManagerInterface $em): JsonResponse
     {
@@ -129,9 +132,91 @@ class AdminDashboardController extends AbstractController
             ];
         }, $users);
 
+        // Revenus plateforme (14 derniers jours)
+        $revenueStart = (new DateTimeImmutable('today'))->modify('-13 days');
+        $dayCursor = $revenueStart;
+        $dailyRevenue = [];
+        for ($i = 0; $i < 14; $i++) {
+            $key = $dayCursor->format('Y-m-d');
+            $dailyRevenue[$key] = [
+                'date'    => $key,
+                'label'   => $dayCursor->format('d/m'),
+                'credits' => 0,
+            ];
+            $dayCursor = $dayCursor->modify('+1 day');
+        }
+
+        $periodRevenueTotal = 0;
+        $participantsRevenue = $em->createQueryBuilder()
+            ->select('p')
+            ->from(RideParticipant::class, 'p')
+            ->where('p.status = :confirmed')
+            ->andWhere('p.confirmedAt >= :start')
+            ->setParameter('confirmed', 'confirmed')
+            ->setParameter('start', $revenueStart)
+            ->getQuery()
+            ->getResult();
+
+        foreach ($participantsRevenue as $participant) {
+            if (!$participant instanceof RideParticipant) {
+                continue;
+            }
+            $confirmedAt = $participant->getConfirmedAt();
+            if (!$confirmedAt) {
+                continue;
+            }
+            $key = $confirmedAt->format('Y-m-d');
+            $periodRevenueTotal += self::PLATFORM_FEE;
+            if (isset($dailyRevenue[$key])) {
+                $dailyRevenue[$key]['credits'] += self::PLATFORM_FEE;
+            }
+        }
+
+        $ridesFees = $em->createQueryBuilder()
+            ->select('r')
+            ->from(Ride::class, 'r')
+            ->where('r.createdAt >= :start')
+            ->setParameter('start', $revenueStart)
+            ->getQuery()
+            ->getResult();
+
+        foreach ($ridesFees as $ride) {
+            if (!$ride instanceof Ride) {
+                continue;
+            }
+            $createdAt = $ride->getCreatedAt();
+            if (!$createdAt) {
+                continue;
+            }
+            $key = $createdAt->format('Y-m-d');
+            $periodRevenueTotal += self::PLATFORM_FEE;
+            if (isset($dailyRevenue[$key])) {
+                $dailyRevenue[$key]['credits'] += self::PLATFORM_FEE;
+            }
+        }
+
+        $totalRides = (int)$em->createQueryBuilder()
+            ->select('COUNT(r.id)')
+            ->from(Ride::class, 'r')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $totalConfirmed = (int)$em->createQueryBuilder()
+            ->select('COUNT(p.id)')
+            ->from(RideParticipant::class, 'p')
+            ->where('p.status = :status')
+            ->setParameter('status', 'confirmed')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $platformTotal = ($totalRides * self::PLATFORM_FEE) + ($totalConfirmed * self::PLATFORM_FEE);
+
         return $this->json([
-            'series' => array_values($months),
-            'users'  => $userList,
+            'series'                 => array_values($months),
+            'users'                  => $userList,
+            'revenueDays'            => array_values($dailyRevenue),
+            'periodRevenue'          => $periodRevenueTotal,
+            'platformTotalCredits'   => $platformTotal,
         ]);
     }
 
@@ -176,5 +261,69 @@ class AdminDashboardController extends AbstractController
         $em->flush();
 
         return $this->json(['ok' => true, 'suspended' => $user->getSuspendedAt() !== null]);
+    }
+
+    #[Route('/users', name: 'user_create', methods: ['POST'])]
+    public function createEmployee(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $passwordHasher
+    ): JsonResponse {
+        $uid = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($uid <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var User|null $admin */
+        $admin = $em->getRepository(User::class)->find($uid);
+        if (!$admin || !in_array('ROLE_ADMIN', $admin->getRoles(), true)) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        $raw = $request->getContent() ?? '';
+        try {
+            $payload = $raw !== '' ? json_decode($raw, true, 512, \JSON_THROW_ON_ERROR) : [];
+        } catch (\JsonException) {
+            return $this->json(['error' => 'Invalid JSON body'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $email = strtolower(trim((string)($payload['email'] ?? '')));
+        $pseudo = trim((string)($payload['pseudo'] ?? ''));
+        $password = (string)($payload['password'] ?? '');
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json(['error' => 'email invalide'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($pseudo === '') {
+            return $this->json(['error' => 'pseudo requis'], Response::HTTP_BAD_REQUEST);
+        }
+        if (strlen($password) < 8) {
+            return $this->json(['error' => 'mot de passe trop court (8 caractères min)'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
+            return $this->json(['error' => 'email déjà utilisé'], Response::HTTP_CONFLICT);
+        }
+
+        $user = new User();
+        $user
+            ->setEmail($email)
+            ->setPseudo($pseudo)
+            ->setRoles(['ROLE_USER', 'ROLE_EMPLOYEE']);
+
+        $user->setPassword($passwordHasher->hashPassword($user, $password));
+
+        $em->persist($user);
+        $em->flush();
+
+        return $this->json([
+            'ok'   => true,
+            'user' => [
+                'id'     => $user->getId(),
+                'email'  => $user->getEmail(),
+                'pseudo' => $user->getPseudo(),
+                'roles'  => $user->getRoles(),
+            ],
+        ], Response::HTTP_CREATED);
     }
 }

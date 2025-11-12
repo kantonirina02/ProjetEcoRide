@@ -4,6 +4,7 @@ import {
   fetchModerationReviews,
   moderateReview,
   suspendUser,
+  createEmployeeAccount,
 } from "../api.js";
 
 const $error = document.getElementById("admin-error");
@@ -19,11 +20,19 @@ const $usersFeedback = document.getElementById("admin-users-feedback");
 const $statusSelect = document.getElementById("admin-review-status");
 const $refreshButton = document.getElementById("admin-refresh");
 
+const $employeeForm = document.getElementById("admin-employee-form");
+const $employeeEmail = document.getElementById("admin-employee-email");
+const $employeePseudo = document.getElementById("admin-employee-pseudo");
+const $employeePassword = document.getElementById("admin-employee-password");
+
 const state = {
   metrics: [],
   reviews: [],
   users: [],
   reviewStatus: "pending",
+  revenueDays: [],
+  platformCredits: 0,
+  periodRevenue: 0,
 };
 
 function resetAlerts() {
@@ -88,7 +97,7 @@ function renderMetrics() {
   const barsSignups = state.metrics.map((m) => toBar(m.signups, maxSignups)).join("");
   const labels = state.metrics.map((m) => `<div class="chart-label">${m.label}</div>`).join("");
 
-  $metricsContainer.innerHTML = `
+  let html = `
     <div class="col-12 col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-body">
@@ -117,6 +126,44 @@ function renderMetrics() {
       </div>
     </div>
   `;
+  if (state.revenueDays.length) {
+    const maxRevenue = Math.max(...state.revenueDays.map((d) => d.credits), 1);
+    const revenueBars = state.revenueDays
+      .map((day) => {
+        const percent = Math.round((day.credits / maxRevenue) * 100);
+        return `<div class="chart-bar bg-warning" style="height:${percent || 5}px" title="${day.credits}"></div>`;
+      })
+      .join("");
+    const revenueLabels = state.revenueDays
+      .map((day) => `<div class="chart-label">${day.label}</div>`)
+      .join("");
+    const totalCredits = Number(state.platformCredits || 0).toLocaleString("fr-FR");
+    const periodCredits = Number(state.periodRevenue || 0).toLocaleString("fr-FR");
+
+    html += `
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h4 class="h6">Crédits plateforme (14 derniers jours)</h4>
+            <div class="chart-stack text-bg-warning">${revenueBars}</div>
+            <div class="d-flex justify-content-between">${revenueLabels}</div>
+            <div class="small text-muted mt-2">Total période : ${periodCredits} crédits</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex flex-column justify-content-center align-items-start">
+            <h4 class="h6">Crédits cumulés</h4>
+            <p class="display-6 mb-1">${totalCredits}</p>
+            <div class="small text-muted">Somme encaissée par la plateforme depuis l'ouverture.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  $metricsContainer.innerHTML = html;
 }
 
 function renderReviews() {
@@ -249,6 +296,9 @@ async function loadMetrics() {
     const payload = await fetchAdminMetrics();
     state.metrics = payload?.series ?? [];
     state.users = payload?.users ?? [];
+    state.revenueDays = payload?.revenueDays ?? [];
+    state.periodRevenue = payload?.periodRevenue ?? 0;
+    state.platformCredits = payload?.platformTotalCredits ?? 0;
     renderMetrics();
     renderUsers();
   } catch (error) {
@@ -286,5 +336,33 @@ $statusSelect?.addEventListener("change", () => {
 $refreshButton?.addEventListener("click", () => {
   init();
 });
+
+async function handleEmployeeCreate(event) {
+  event.preventDefault();
+  if (!$employeeEmail || !$employeePseudo || !$employeePassword) return;
+  const email = $employeeEmail.value.trim();
+  const pseudo = $employeePseudo.value.trim();
+  const password = $employeePassword.value.trim();
+  if (!email || !pseudo || !password) {
+    showError("Tous les champs sont requis pour créer un employé.");
+    return;
+  }
+  resetAlerts();
+  const submitBtn = $employeeForm?.querySelector("button[type='submit']");
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    await createEmployeeAccount({ email, pseudo, password });
+    showSuccess("Compte employé créé.");
+    $employeeForm?.reset();
+    await loadMetrics();
+  } catch (error) {
+    console.error(error);
+    showError("Impossible de créer le compte employé.");
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+$employeeForm?.addEventListener("submit", handleEmployeeCreate);
 
 init();
