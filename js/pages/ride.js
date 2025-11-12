@@ -164,7 +164,7 @@ function rideView(ride, state) {
           ${ride.driver ? `<div class="mt-2">Conducteur&nbsp;: <strong>${ride.driver.pseudo ?? "Inconnu"}</strong></div>` : ""}
         </div>
         <div class="text-end">
-          <div class="fs-4 fw-bold">${priceValue} &euro;</div>
+          <div class="fs-4 fw-bold">${priceValue} cr</div>
           <div class="mt-2">${bookHtml}</div>
         </div>
       </div>

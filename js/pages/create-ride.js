@@ -114,7 +114,7 @@ async function onSubmit(event) {
 
   const priceInput = Number(val(document.getElementById("cr-price")));
   if (!Number.isFinite(priceInput) || priceInput <= PLATFORM_FEE) {
-    showErr(`Le prix doit etre strictement superieur a ${PLATFORM_FEE} credits.`);
+    showErr(`Le prix doit être strictement supérieur à ${PLATFORM_FEE} crédits.`);
     return;
   }
 

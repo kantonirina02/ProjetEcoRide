@@ -105,7 +105,7 @@ function cardTemplate(ride, state) {
               </div>
               <div class="text-end">
                 ${soldOut ? '<div class="badge text-bg-danger mb-2">Complet</div>' : ""}
-                <div class="fs-5 fw-bold">${typeof ride.price === "number" ? ride.price.toFixed(2) : ride.price} €</div>
+                <div class="fs-5 fw-bold">${typeof ride.price === "number" ? ride.price.toFixed(2) : ride.price} cr</div>
               </div>
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">

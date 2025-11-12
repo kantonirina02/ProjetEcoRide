@@ -307,12 +307,12 @@ function sortByDateAsc(list, getter) {
 function formatPrice(value) {
   const amount = Number(value);
   if (Number.isFinite(amount)) {
-    return `${amount.toFixed(2)} €`;
+    return `${amount.toFixed(2)} cr`;
   }
   if (value == null) {
     return "";
   }
-  return `${value} €`;
+  return `${value} cr`;
 }
 
 function badge(text) {
