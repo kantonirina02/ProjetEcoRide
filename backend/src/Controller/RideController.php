@@ -410,16 +410,7 @@ class RideController extends AbstractController
             $passenger->setCreditsBalance($passenger->getCreditsBalance() - $costCredits);
             $this->recordLedger($em, $passenger, $ride, -$costCredits, 'ride_booking');
 
-            $driverShare = 0;
-            $driver = $ride->getDriver();
-            if ($driver && $driver->getId() !== $passenger->getId()) {
-                $driverShare = max(0, $costCredits - self::PLATFORM_FEE);
-                if ($driverShare > 0) {
-                    $driver->setCreditsBalance($driver->getCreditsBalance() + $driverShare);
-                    $this->recordLedger($em, $driver, $ride, $driverShare, 'ride_income');
-                    $em->persist($driver);
-                }
-            }
+            $driverShare = max(0, $costCredits - self::PLATFORM_FEE);
 
             $em->persist($participant);
             $em->persist($ride);
@@ -506,7 +497,7 @@ class RideController extends AbstractController
 
             $driverShare = 0;
             $driver = $ride->getDriver();
-            if ($driver && $driver->getId() !== $passenger->getId() && $creditsUsed > 0) {
+            if ($driver && $ride->getPayoutReleasedAt() && $driver->getId() !== $passenger->getId() && $creditsUsed > 0) {
                 $driverShare = max(0, $creditsUsed - self::PLATFORM_FEE);
                 if ($driverShare > 0) {
                     $driver->setCreditsBalance($driver->getCreditsBalance() - $driverShare);
@@ -563,6 +554,9 @@ class RideController extends AbstractController
                 'startAt' => $r->getStartAt()?->format('Y-m-d H:i'),
                 'seats'   => $p->getSeatsBooked(),
                 'status'  => $p->getStatus(),
+                'rideStatus' => $r->getStatus(),
+                'feedbackStatus' => $p->getFeedbackStatus(),
+                'awaitingFeedback' => $r->getStatus() === 'waiting_feedback' && $p->getFeedbackStatus() === 'pending',
             ];
         }
 
@@ -662,7 +656,12 @@ class RideController extends AbstractController
                     $em->persist($passenger);
                 }
 
-                if ($creditsUsed > 0 && $driver && $driver->getId() !== $passenger?->getId()) {
+                if (
+                    $creditsUsed > 0
+                    && $driver
+                    && $ride->getPayoutReleasedAt()
+                    && $driver->getId() !== $passenger?->getId()
+                ) {
                     $driverShare = max(0, $creditsUsed - self::PLATFORM_FEE);
                     if ($driverShare > 0) {
                         $driver->setCreditsBalance($driver->getCreditsBalance() - $driverShare);
@@ -700,6 +699,150 @@ class RideController extends AbstractController
             }
             return $this->json(['error' => 'Cancellation failed', 'detail' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+
+    #[Route('/rides/{id<\d+>}/start', name: 'ride_start', methods: ['POST'])]
+    public function startRide(int $id, Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $driverId = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($driverId <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var Ride|null $ride */
+        $ride = $em->getRepository(Ride::class)->find($id);
+        if (!$ride) {
+            return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($ride->getDriver()?->getId() !== $driverId) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        if ($ride->getStatus() !== 'open') {
+            return $this->json(['error' => 'Ride already started'], Response::HTTP_CONFLICT);
+        }
+
+        $now = new DateTimeImmutable();
+        $scheduled = $ride->getStartAt();
+        if ($scheduled && $scheduled > $now->modify('+1 hour')) {
+            return $this->json(['error' => 'Too early to start this ride'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $ride->setStatus('running')->setUpdatedAt($now);
+        $em->persist($ride);
+        $em->flush();
+
+        return $this->json([
+            'ok'     => true,
+            'rideId' => $ride->getId(),
+            'status' => $ride->getStatus(),
+        ]);
+    }
+
+    #[Route('/rides/{id<\d+>}/finish', name: 'ride_finish', methods: ['POST'])]
+    public function finishRide(int $id, Request $request, EntityManagerInterface $em, MailerInterface $mailer): JsonResponse
+    {
+        $driverId = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($driverId <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var Ride|null $ride */
+        $ride = $em->getRepository(Ride::class)->find($id);
+        if (!$ride) {
+            return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($ride->getDriver()?->getId() !== $driverId) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!in_array($ride->getStatus(), ['open', 'running'], true)) {
+            return $this->json(['error' => 'Ride not in progress'], Response::HTTP_CONFLICT);
+        }
+
+        $now = new DateTimeImmutable();
+        $ride
+            ->setStatus('waiting_feedback')
+            ->setEndAt($ride->getEndAt() ?? $now)
+            ->setUpdatedAt($now);
+
+        $em->persist($ride);
+        $em->flush();
+
+        $this->notifyParticipantsForFeedback($ride, $mailer);
+        $this->evaluateRideFeedback($ride, $em, $mailer);
+        $em->flush();
+
+        return $this->json([
+            'ok'     => true,
+            'rideId' => $ride->getId(),
+            'status' => $ride->getStatus(),
+        ]);
+    }
+
+    #[Route('/rides/{id<\d+>}/feedback', name: 'ride_feedback', methods: ['POST'])]
+    public function rideFeedback(
+        int $id,
+        Request $request,
+        EntityManagerInterface $em,
+        MailerInterface $mailer
+    ): JsonResponse {
+        $userId = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($userId <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var Ride|null $ride */
+        $ride = $em->getRepository(Ride::class)->find($id);
+        if (!$ride) {
+            return $this->json(['error' => 'Ride not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $participant = $em->getRepository(RideParticipant::class)->findOneBy([
+            'ride' => $ride,
+            'user' => $em->getReference(User::class, $userId),
+        ]);
+
+        if (!$participant || $participant->getStatus() !== 'confirmed') {
+            return $this->json(['error' => 'Feedback not allowed'], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!in_array($ride->getStatus(), ['waiting_feedback', 'issue_reported'], true)) {
+            return $this->json(['error' => 'Ride is not awaiting feedback'], Response::HTTP_CONFLICT);
+        }
+
+        $raw = $request->getContent() ?? '';
+        try {
+            $payload = $raw !== '' ? json_decode($raw, true, 512, \JSON_THROW_ON_ERROR) : [];
+        } catch (JsonException) {
+            return $this->json(['error' => 'Invalid JSON body'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $status = isset($payload['status']) ? strtolower(trim((string)$payload['status'])) : '';
+        if (!in_array($status, ['ok', 'issue'], true)) {
+            return $this->json(['error' => 'status must be ok or issue'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $note = isset($payload['note']) ? trim((string)$payload['note']) : null;
+
+        $participant
+            ->setFeedbackStatus($status)
+            ->setFeedbackAt(new DateTimeImmutable())
+            ->setFeedbackNote($note);
+
+        $em->persist($participant);
+        $this->evaluateRideFeedback($ride, $em, $mailer);
+        $em->flush();
+
+        return $this->json([
+            'ok'             => true,
+            'rideId'         => $ride->getId(),
+            'status'         => $ride->getStatus(),
+            'feedbackStatus' => $participant->getFeedbackStatus(),
+        ]);
     }
 
     /**
@@ -1143,6 +1286,126 @@ class RideController extends AbstractController
             'viewerId'         => $sessionUserId ?: null,
             'isDriverViewing'  => $isDriverViewing,
         ]);
+    }
+
+    private function notifyParticipantsForFeedback(Ride $ride, MailerInterface $mailer): void
+    {
+        foreach ($ride->getRideParticipants() as $participant) {
+            $user = $participant->getUser();
+            if (!$user || !$user->getEmail()) {
+                continue;
+            }
+
+            $email = (new Email())
+                ->to($user->getEmail())
+                ->subject('EcoRide - Merci de confirmer votre trajet')
+                ->text(sprintf(
+                    "Bonjour %s,\n\nLe trajet %s -> %s vient de se terminer. Merci d'indiquer depuis votre espace si tout s'est bien passé ou s'il y a eu un problème.\n\nL'équipe EcoRide",
+                    $user->getPseudo() ?? 'covoitureur',
+                    $ride->getFromCity(),
+                    $ride->getToCity()
+                ));
+
+            try {
+                $mailer->send($email);
+            } catch (Throwable) {
+                // Ignorer l'erreur d'envoi pour ne pas casser le flux principal.
+            }
+        }
+    }
+
+    private function notifySupportOfIssue(Ride $ride, MailerInterface $mailer): void
+    {
+        $email = (new Email())
+            ->to('support@ecoride.internal')
+            ->subject(sprintf('EcoRide - Trajet #%d signalé', $ride->getId()))
+            ->text(sprintf(
+                "Un participant a signalé un problème sur le trajet %s -> %s (id %d). Merci de contacter le conducteur %s.",
+                $ride->getFromCity(),
+                $ride->getToCity(),
+                $ride->getId(),
+                $ride->getDriver()?->getEmail() ?? 'inconnu'
+            ));
+
+        try {
+            $mailer->send($email);
+        } catch (Throwable) {
+            // pas bloquant
+        }
+    }
+
+    private function evaluateRideFeedback(Ride $ride, EntityManagerInterface $em, MailerInterface $mailer): void
+    {
+        $pending = 0;
+        $hasIssue = false;
+
+        foreach ($ride->getRideParticipants() as $participant) {
+            if ($participant->getStatus() !== 'confirmed') {
+                continue;
+            }
+            $status = $participant->getFeedbackStatus();
+            if ($status === 'issue') {
+                $hasIssue = true;
+                break;
+            }
+            if ($status === 'pending') {
+                $pending++;
+            }
+        }
+
+        if ($hasIssue) {
+            $ride->setStatus('issue_reported')->setUpdatedAt(new DateTimeImmutable());
+            $em->persist($ride);
+            $this->notifySupportOfIssue($ride, $mailer);
+            return;
+        }
+
+        if ($pending === 0) {
+            $ride->setStatus('completed')->setUpdatedAt(new DateTimeImmutable());
+            $this->releaseDriverPayout($ride, $em);
+            $em->persist($ride);
+        }
+    }
+
+    private function participantShare(RideParticipant $participant): int
+    {
+        $credits = (int)($participant->getCreditsUsed() ?? 0);
+        if ($credits <= 0) {
+            return 0;
+        }
+        return max(0, $credits - self::PLATFORM_FEE);
+    }
+
+    private function releaseDriverPayout(Ride $ride, EntityManagerInterface $em): int
+    {
+        if ($ride->getPayoutReleasedAt()) {
+            return 0;
+        }
+
+        $driver = $ride->getDriver();
+        if (!$driver) {
+            return 0;
+        }
+
+        $total = 0;
+        foreach ($ride->getRideParticipants() as $participant) {
+            if ($participant->getStatus() !== 'confirmed') {
+                continue;
+            }
+            if ($participant->getFeedbackStatus() !== 'ok') {
+                continue;
+            }
+            $total += $this->participantShare($participant);
+        }
+
+        if ($total > 0) {
+            $driver->setCreditsBalance($driver->getCreditsBalance() + $total);
+            $this->recordLedger($em, $driver, $ride, $total, 'ride_income_release');
+            $em->persist($driver);
+        }
+
+        $ride->setPayoutReleasedAt(new DateTimeImmutable());
+        return $total;
     }
 
     private function computeCostCredits(Ride $ride, int $seats): int

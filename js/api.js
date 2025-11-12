@@ -125,6 +125,34 @@ export async function cancelRideAsDriver(rideId) {
   return json(res);
 }
 
+export async function startRide(rideId) {
+  const res = await fetch(`${API_BASE}/rides/${rideId}/start`, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  return json(res);
+}
+
+export async function finishRide(rideId) {
+  const res = await fetch(`${API_BASE}/rides/${rideId}/finish`, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  return json(res);
+}
+
+export async function sendRideFeedback(rideId, { status, note } = {}) {
+  const res = await fetch(`${API_BASE}/rides/${rideId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status, note }),
+  });
+  return json(res);
+}
+
 /* ---------- Current user data ---------- */
 export async function fetchAccountOverview() {
   const res = await fetch(`${API_BASE}/me/overview`, {

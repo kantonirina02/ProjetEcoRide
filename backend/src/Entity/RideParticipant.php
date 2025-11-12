@@ -42,10 +42,20 @@ class RideParticipant
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $cancelledAt = null;
 
+    #[ORM\Column(length: 20, options: ['default' => 'pending'])]
+    private string $feedbackStatus = 'pending';
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $feedbackAt = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $feedbackNote = null;
+
     public function __construct()
     {
         $this->requestedAt = new \DateTimeImmutable('now');
         $this->status = 'requested';
+        $this->feedbackStatus = 'pending';
     }
 
     public function getId(): ?int { return $this->id; }
@@ -73,4 +83,22 @@ class RideParticipant
 
     public function getCancelledAt(): ?\DateTimeImmutable { return $this->cancelledAt; }
     public function setCancelledAt(?\DateTimeImmutable $cancelledAt): self { $this->cancelledAt = $cancelledAt; return $this; }
+
+    public function getFeedbackStatus(): string { return $this->feedbackStatus; }
+    public function setFeedbackStatus(string $status): self
+    {
+        $allowed = ['pending', 'ok', 'issue'];
+        $this->feedbackStatus = in_array($status, $allowed, true) ? $status : 'pending';
+        return $this;
+    }
+
+    public function getFeedbackAt(): ?\DateTimeImmutable { return $this->feedbackAt; }
+    public function setFeedbackAt(?\DateTimeImmutable $feedbackAt): self { $this->feedbackAt = $feedbackAt; return $this; }
+
+    public function getFeedbackNote(): ?string { return $this->feedbackNote; }
+    public function setFeedbackNote(?string $note): self
+    {
+        $this->feedbackNote = $note !== null && trim($note) === '' ? null : $note;
+        return $this;
+    }
 }

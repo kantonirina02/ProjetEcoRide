@@ -65,6 +65,9 @@ class Ride
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $payoutReleasedAt = null;
+
     /** @var Collection<int, RideParticipant> */
     #[ORM\OneToMany(targetEntity: RideParticipant::class, mappedBy: 'ride')]
     private Collection $rideParticipants;
@@ -134,6 +137,9 @@ class Ride
 
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function setUpdatedAt(?\DateTimeImmutable $updatedAt): self { $this->updatedAt = $updatedAt; return $this; }
+
+    public function getPayoutReleasedAt(): ?\DateTimeImmutable { return $this->payoutReleasedAt; }
+    public function setPayoutReleasedAt(?\DateTimeImmutable $releasedAt): self { $this->payoutReleasedAt = $releasedAt; return $this; }
 
     /** @return Collection<int, RideParticipant> */
     public function getRideParticipants(): Collection { return $this->rideParticipants; }

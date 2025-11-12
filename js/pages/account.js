@@ -11,6 +11,9 @@ import {
   saveVehicle,
   deleteVehicle,
   cancelRideAsDriver,
+  startRide,
+  finishRide,
+  sendRideFeedback,
   uploadProfilePhoto,
   deleteProfilePhoto,
 } from "../api.js";
@@ -430,6 +433,23 @@ function bookingCard(booking) {
   const canCancel =
     !isPast(booking.startAt) &&
     (!booking.status || booking.status === "confirmed");
+  let feedbackHtml = "";
+  if (booking.awaitingFeedback) {
+    feedbackHtml = `
+      <div class="mt-2 d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-success btn-sm js-booking-feedback" data-status="ok" data-id="${booking.rideId}">
+          Tout s'est bien passé
+        </button>
+        <button class="btn btn-outline-danger btn-sm js-booking-feedback" data-status="issue" data-id="${booking.rideId}">
+          Signaler un problème
+        </button>
+      </div>
+    `;
+  } else if (booking.feedbackStatus && booking.feedbackStatus !== "pending") {
+    feedbackHtml = `<div class="mt-2 small text-muted">Feedback envoyé : ${
+      booking.feedbackStatus === "ok" ? "trajet validé" : "problème signalé"
+    }</div>`;
+  }
 
   return `
     <div class="card mb-2 shadow-sm">
@@ -443,6 +463,7 @@ function bookingCard(booking) {
         </div>
         <div class="text-end">
           <button class="btn btn-outline-danger btn-sm js-unbook" data-id="${booking.rideId}" ${canCancel ? "" : "disabled"}>Annuler</button>
+          ${feedbackHtml}
         </div>
       </div>
     </div>
@@ -453,6 +474,22 @@ function driverRideCard(ride, canCancel) {
   const vehicle = ride.vehicle
     ? `${ride.vehicle.brand ?? ""} ${ride.vehicle.model ?? ""}`.trim()
     : "";
+  const status = (ride.status || "").toLowerCase();
+  const canStart = status === "open";
+  const canComplete = status === "running";
+  const awaitingFeedback = status === "waiting_feedback";
+
+  const lifecycleButtons = [];
+  if (canStart) {
+    lifecycleButtons.push(
+      `<button class="btn btn-outline-success btn-sm js-ride-start" data-id="${ride.id}">Démarrer</button>`
+    );
+  }
+  if (canComplete) {
+    lifecycleButtons.push(
+      `<button class="btn btn-outline-primary btn-sm js-ride-complete" data-id="${ride.id}">Arrivée à destination</button>`
+    );
+  }
 
   return `
     <div class="card mb-2 shadow-sm">
@@ -467,7 +504,17 @@ function driverRideCard(ride, canCancel) {
         </div>
         <div class="text-end">
           <div class="fw-bold">${formatPrice(ride.price)}</div>
-          <button class="btn btn-outline-danger btn-sm mt-2 js-cancel-ride" data-id="${ride.id}" ${canCancel ? "" : "disabled"}>Annuler le trajet</button>
+          <div class="d-flex flex-column gap-2 mt-2">
+            ${lifecycleButtons.join("")}
+            ${
+              awaitingFeedback
+                ? '<span class="badge text-bg-warning">En attente des retours passagers</span>'
+                : ""
+            }
+            <button class="btn btn-outline-danger btn-sm js-cancel-ride" data-id="${ride.id}" ${
+              canCancel ? "" : "disabled"
+            }>Annuler le trajet</button>
+          </div>
         </div>
       </div>
     </div>
@@ -621,6 +668,7 @@ async function renderAccount() {
       $bookingsPast
         ?.querySelectorAll(".js-unbook")
         .forEach((button) => attachUnbookHandler(button));
+      bindBookingFeedbackHandlers();
     } else if ($bookingsFeedback) {
       $bookingsFeedback.textContent = "Impossible de charger les réservations.";
     }
@@ -664,6 +712,7 @@ async function renderAccount() {
       $ridesUpcoming
         ?.querySelectorAll(".js-cancel-ride")
         .forEach((button) => attachCancelRideHandler(button));
+      bindRideLifecycleHandlers();
     } else if ($ridesFeedback) {
       $ridesFeedback.textContent = "Impossible de charger les trajets conducteur.";
     }
@@ -724,6 +773,70 @@ function attachCancelRideHandler(button) {
       button.disabled = false;
       button.textContent = previous;
     }
+  });
+}
+
+function bindRideLifecycleHandlers() {
+  document.querySelectorAll(".js-ride-start").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = Number(button.dataset.id);
+      if (!Number.isFinite(id)) return;
+      button.disabled = true;
+      try {
+        await startRide(id);
+        await renderAccount();
+      } catch (error) {
+        console.error(error);
+        window.alert("Impossible de démarrer ce trajet.");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll(".js-ride-complete").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = Number(button.dataset.id);
+      if (!Number.isFinite(id)) return;
+      button.disabled = true;
+      try {
+        await finishRide(id);
+        await renderAccount();
+      } catch (error) {
+        console.error(error);
+        window.alert("Impossible de clôturer ce trajet.");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+function bindBookingFeedbackHandlers() {
+  document.querySelectorAll(".js-booking-feedback").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = Number(button.dataset.id);
+      if (!Number.isFinite(id)) return;
+      const status = button.dataset.status === "issue" ? "issue" : "ok";
+      let note = null;
+      if (status === "issue") {
+        note = window.prompt(
+          "Décrivez le problème rencontré (optionnel) :",
+          ""
+        );
+      }
+
+      button.disabled = true;
+      try {
+        await sendRideFeedback(id, { status, note: note ?? undefined });
+        await renderAccount();
+      } catch (error) {
+        console.error(error);
+        window.alert("Impossible d'enregistrer votre retour.");
+      } finally {
+        button.disabled = false;
+      }
+    });
   });
 }
 
