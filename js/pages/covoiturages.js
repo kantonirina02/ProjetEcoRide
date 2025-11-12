@@ -15,8 +15,6 @@ const $pmax = document.getElementById("priceFilter");
 const $dmax = document.getElementById("durationFilter");
 const $rmin = document.getElementById("ratingFilter");
 
-const FALLBACK_PHOTO = "/images/Andrea.jpg";
-
 function navigate(href) {
   if (typeof window.navigate === "function") {
     window.navigate(href);
@@ -81,7 +79,9 @@ function cardTemplate(ride, state) {
 
   const vehicle = ride.vehicle || {};
   const driver = ride.driver || {};
-  const driverPhoto = driver.photo || FALLBACK_PHOTO;
+  const driverAvatar = driver.photo
+    ? `<img src="${driver.photo}" alt="${driver.pseudo ?? "Conducteur"}" class="rounded-circle border" style="width:64px;height:64px;object-fit:cover;">`
+    : `<div class="rounded-circle border bg-light d-flex align-items-center justify-content-center text-muted" style="width:64px;height:64px;"><i class="bi bi-person fs-4"></i></div>`;
   const ratingHtml = formatRating(driver);
 
   const seatsInfo = `${ride.seatsLeft ?? 0}/${ride.seatsTotal ?? 0} places`;
@@ -93,8 +93,8 @@ function cardTemplate(ride, state) {
     <div class="card mb-3 shadow-sm">
       <div class="card-body">
         <div class="d-flex align-items-start gap-3">
-          <div class="flex-shrink-0">
-            <img src="${driverPhoto}" alt="${driver.pseudo ?? "Conducteur"}" class="rounded-circle border" style="width:64px;height:64px;object-fit:cover;">
+          <div class="flex-shrink-0 d-flex align-items-center justify-content-center" style="width:64px;height:64px;">
+            ${driverAvatar}
           </div>
           <div class="flex-grow-1">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -151,7 +151,13 @@ async function render() {
   $list.innerHTML = "";
 
   try {
-    const ratingParam = $rmin?.value ? Number($rmin.value) : null;
+    const ratingRaw = $rmin?.value?.trim() ?? "";
+    const ratingParam = ratingRaw === "" ? null : Number(ratingRaw);
+    if (ratingParam !== null && Number.isNaN(ratingParam)) {
+      $feedback.textContent = "";
+      $err.textContent = "La note minimale doit être un nombre valide.";
+      return;
+    }
 
     const result = await fetchRides({
       from: $from?.value?.trim() || "",
@@ -160,10 +166,7 @@ async function render() {
       eco: $eco?.checked ? 1 : undefined,
       priceMax: $pmax?.value ? Number($pmax.value) : undefined,
       durationMax: $dmax?.value ? Number($dmax.value) : undefined,
-      ratingMin:
-        ratingParam != null && !Number.isNaN(ratingParam)
-          ? ratingParam
-          : undefined,
+      ratingMin: ratingParam ?? undefined,
     });
 
     const rides = Array.isArray(result?.rides)
@@ -173,18 +176,7 @@ async function render() {
       : [];
     const suggestion = result?.suggestion ?? null;
 
-    const filteredRides =
-      ratingParam != null && !Number.isNaN(ratingParam)
-        ? rides.filter((ride) => {
-            const rating = ride?.driver?.rating;
-            if (rating == null) {
-              return ratingParam <= 0;
-            }
-            return Number(rating) >= ratingParam;
-          })
-        : rides;
-
-    if (filteredRides.length === 0) {
+    if (rides.length === 0) {
       $list.innerHTML = "";
       renderSuggestion(suggestion);
       return;
@@ -195,7 +187,7 @@ async function render() {
     const bookedIds = await fetchMyBookedRideIds();
     const state = { bookedIds };
 
-    $list.innerHTML = filteredRides
+    $list.innerHTML = rides
       .map((ride) => cardTemplate(ride, state))
       .join("");
     bindBookButtons();

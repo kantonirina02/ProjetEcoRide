@@ -80,7 +80,9 @@ export async function fetchRides({ from = "", to = "", date = "", eco, priceMax,
   if (eco !== undefined) params.set("eco", eco ? "1" : "0");
   if (priceMax) params.set("priceMax", String(priceMax));
   if (durationMax) params.set("durationMax", String(durationMax));
-  if (ratingMin) params.set("ratingMin", String(ratingMin));
+  if (ratingMin !== undefined && ratingMin !== null && !Number.isNaN(Number(ratingMin))) {
+    params.set("ratingMin", String(ratingMin));
+  }
 
   const url = `${API_BASE}/rides${params.toString() ? `?${params.toString()}` : ""}`;
   const res = await fetch(url, {
@@ -95,12 +97,13 @@ export async function fetchRides({ from = "", to = "", date = "", eco, priceMax,
 }
 
 /* ---------- Reservations ---------- */
-export async function bookRide(id, { seats = 1 } = {}) {
+export async function bookRide(id, { seats = 1, confirm = false } = {}) {
+  const payload = confirm ? { seats, confirm: true } : { seats };
   const res = await fetch(`${API_BASE}/rides/${id}/book`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "include",
-    body: JSON.stringify({ seats }),
+    body: JSON.stringify(payload),
   });
   return json(res);
 }
