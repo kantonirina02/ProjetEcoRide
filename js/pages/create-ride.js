@@ -135,6 +135,9 @@ async function onSubmit(event) {
   if (selectedVehicleId) {
     payload.vehicleId = selectedVehicleId;
   } else {
+    const plateInput = val(document.getElementById("cr-plate"));
+    const firstRegistrationInput = val(document.getElementById("cr-firstreg"));
+
     payload.vehicle = {
       brand: val(document.getElementById("cr-brand")),
       model: val(document.getElementById("cr-model")),
@@ -142,7 +145,17 @@ async function onSubmit(event) {
       seatsTotal: Number(val(document.getElementById("cr-seats")) || 4),
       color: val(document.getElementById("cr-color")),
       energy: val(document.getElementById("cr-energy"), false),
+      plate: plateInput ? plateInput.toUpperCase() : "",
+      firstRegistrationAt: firstRegistrationInput,
     };
+    if (!payload.vehicle.plate) {
+      showErr("La plaque d'immatriculation est requise pour un nouveau véhicule.");
+      return;
+    }
+    if (!payload.vehicle.firstRegistrationAt) {
+      showErr("La date de première immatriculation est requise.");
+      return;
+    }
   }
 
   payload.startAt = payload.startAt.replace("T", " ");

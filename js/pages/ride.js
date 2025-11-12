@@ -58,6 +58,42 @@ function energyBadge(energy) {
   return `<span class="badge text-bg-${map[clean] || "light"}">Énergie&nbsp;: ${energy}</span>`;
 }
 
+async function ensureConfirmation(rideId, seats = 1) {
+  const seatsCount = Number.isFinite(seats) && seats > 0 ? seats : 1;
+  let response = await bookRide(rideId, { seats: seatsCount });
+
+  if (
+    response &&
+    typeof response === "object" &&
+    response.requiresConfirmation
+  ) {
+    const cost = Number.isFinite(response.costCredits)
+      ? response.costCredits
+      : seatsCount;
+    const available = Number.isFinite(response.availableCredits)
+      ? response.availableCredits
+      : null;
+    const remaining =
+      available !== null ? available - cost : null;
+
+    let message = `Confirmer la réservation de ${seatsCount} siège(s) pour ${cost} crédit(s) ?`;
+    if (available !== null) {
+      message += `\nCrédits disponibles : ${available}`;
+    }
+    if (remaining !== null) {
+      message += `\nCrédits restants après confirmation : ${remaining}`;
+    }
+
+    if (!window.confirm(message)) {
+      return { cancelled: true };
+    }
+
+    response = await bookRide(rideId, { seats: seatsCount, confirm: true });
+  }
+
+  return response;
+}
+
 function rideView(ride, state) {
   const priceValue = typeof ride.price === "number" ? ride.price.toFixed(2) : ride.price;
   const vehicleDetails = ride.vehicle
@@ -94,7 +130,9 @@ function rideView(ride, state) {
 
   const driverPhoto = ride.driver?.photo
     ? `<img src="${ride.driver.photo}" alt="Photo conducteur" class="rounded-circle me-3" style="width:56px;height:56px;object-fit:cover;" />`
-    : "";
+    : `<div class="rounded-circle border bg-light text-muted d-flex align-items-center justify-content-center me-3" style="width:56px;height:56px;">
+        <i class="bi bi-person fs-4"></i>
+      </div>`;
 
   const ratingBadge =
     typeof ride.driver?.rating === "number"
@@ -209,23 +247,25 @@ async function render() {
     const $unbook = document.getElementById("ride-unbook");
 
     $book?.addEventListener("click", async () => {
-      const old = $book.textContent;
+      const previousLabel = $book.textContent;
       $book.disabled = true;
       $book.textContent = "...";
       try {
-        await bookRide(ride.id, { seats: 1 });
-        location.reload();
+        const result = await ensureConfirmation(ride.id, 1);
+        if (!result || !result.cancelled) {
+          location.reload();
+        }
       } catch (error) {
         console.error(error);
-        alert("Échec de la réservation");
+        window.alert("Échec de la réservation.");
       } finally {
         $book.disabled = false;
-        $book.textContent = old;
+        $book.textContent = previousLabel;
       }
     });
 
     $unbook?.addEventListener("click", async () => {
-      const old = $unbook.textContent;
+      const previousLabel = $unbook.textContent;
       $unbook.disabled = true;
       $unbook.textContent = "...";
       try {
@@ -233,10 +273,10 @@ async function render() {
         location.reload();
       } catch (error) {
         console.error(error);
-        alert("Échec de l'annulation");
+        window.alert("Échec de l'annulation.");
       } finally {
         $unbook.disabled = false;
-        $unbook.textContent = old;
+        $unbook.textContent = previousLabel;
       }
     });
   } catch (error) {

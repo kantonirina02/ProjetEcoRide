@@ -733,6 +733,7 @@ class RideController extends AbstractController
                 'energy'     => $vehicle->getEnergy(),
                 'color'      => $vehicle->getColor(),
                 'plate'      => $vehicle->getPlate(),
+                'firstRegistrationAt' => $vehicle->getFirstRegistrationAt()?->format('Y-m-d'),
             ];
         }, $vehicles);
 
@@ -885,6 +886,30 @@ class RideController extends AbstractController
                     return $this->json(['error' => 'vehicle.brand est requis'], Response::HTTP_BAD_REQUEST);
                 }
 
+                $model = trim((string)($vehInput['model'] ?? ''));
+                if ($model === '') {
+                    $em->rollback();
+                    return $this->json(['error' => 'vehicle.model est requis'], Response::HTTP_BAD_REQUEST);
+                }
+
+                $plate = isset($vehInput['plate']) ? strtoupper(trim((string)$vehInput['plate'])) : '';
+                if ($plate === '') {
+                    $em->rollback();
+                    return $this->json(['error' => 'vehicle.plate est requis'], Response::HTTP_BAD_REQUEST);
+                }
+
+                $firstRegRaw = isset($vehInput['firstRegistrationAt']) ? trim((string)$vehInput['firstRegistrationAt']) : '';
+                if ($firstRegRaw === '') {
+                    $em->rollback();
+                    return $this->json(['error' => 'vehicle.firstRegistrationAt est requis'], Response::HTTP_BAD_REQUEST);
+                }
+                try {
+                    $firstRegistration = new DateTimeImmutable($firstRegRaw);
+                } catch (Exception) {
+                    $em->rollback();
+                    return $this->json(['error' => 'vehicle.firstRegistrationAt invalide'], Response::HTTP_BAD_REQUEST);
+                }
+
                 $brandRepo = $em->getRepository(Brand::class);
                 $brand = $brandRepo->findOneBy(['name' => $brandName]);
                 if (!$brand) {
@@ -892,41 +917,34 @@ class RideController extends AbstractController
                     $em->persist($brand);
                 }
 
-                $model = trim((string)($vehInput['model'] ?? ''));
-                if ($model === '') {
+                $vehicleRepo = $em->getRepository(Vehicle::class);
+                $existingPlate = $vehicleRepo->findOneBy(['plate' => $plate]);
+                if ($existingPlate && $existingPlate->getOwner()?->getId() !== $driver->getId()) {
                     $em->rollback();
-                    return $this->json(['error' => 'vehicle.model est requis'], Response::HTTP_BAD_REQUEST);
+                    return $this->json(['error' => 'vehicle.plate déjà utilisé'], Response::HTTP_CONFLICT);
                 }
 
-                $vehicle = $em->getRepository(Vehicle::class)->findOneBy([
-                    'owner' => $driver,
-                    'brand' => $brand,
-                    'model' => $model,
-                ]);
+                $vehicle = $existingPlate ?? new Vehicle();
+                if (!$existingPlate) {
+                    $vehicle->setOwner($driver);
+                }
 
                 $seatsTotal = isset($vehInput['seatsTotal']) ? max(1, (int)$vehInput['seatsTotal']) : 4;
                 $eco    = (bool)($vehInput['eco'] ?? false);
-                $color  = $vehInput['color'] ?? null;
-                $energy = (string)($vehInput['energy'] ?? 'electric');
+                $color  = isset($vehInput['color']) ? trim((string)$vehInput['color']) : null;
+                $energy = trim((string)($vehInput['energy'] ?? 'electric'));
 
-                if (!$vehicle) {
-                    $vehicle = (new Vehicle())
-                        ->setOwner($driver)
-                        ->setBrand($brand)
-                        ->setModel($model)
-                        ->setEco($eco)
-                        ->setSeatsTotal($seatsTotal)
-                        ->setColor($color)
-                        ->setEnergy($energy)
-                        ->setFirstRegistrationAt(new DateTimeImmutable('2019-01-01'));
-                    $em->persist($vehicle);
-                } else {
-                    $vehicle
-                        ->setEco($eco)
-                        ->setSeatsTotal($seatsTotal)
-                        ->setColor($color)
-                        ->setEnergy($energy);
-                }
+                $vehicle
+                    ->setBrand($brand)
+                    ->setModel($model)
+                    ->setEco($eco)
+                    ->setSeatsTotal($seatsTotal)
+                    ->setColor($color !== '' ? $color : null)
+                    ->setEnergy($energy !== '' ? $energy : 'electric')
+                    ->setPlate($plate)
+                    ->setFirstRegistrationAt($firstRegistration);
+
+                $em->persist($vehicle);
             }
 
             if (!$vehicle) {
@@ -1153,16 +1171,6 @@ class RideController extends AbstractController
         if (!$driver) {
             return null;
         }
-        if ($driver->getProfilePhoto()) {
-            return $driver->getProfilePhoto();
-        }
-        $pseudo = strtolower((string)$driver->getPseudo());
-        if (str_contains($pseudo, 'martin') || str_contains($pseudo, 'max')) {
-            return '/images/Martin.jpg';
-        }
-        if (str_contains($pseudo, 'andrea') || str_contains($pseudo, 'anne')) {
-            return '/images/Andrea.jpg';
-        }
-        return ($driver->getId() ?? 0) % 2 === 0 ? '/images/Andrea.jpg' : '/images/Martin.jpg';
+        return $driver->getProfilePhoto();
     }
 }

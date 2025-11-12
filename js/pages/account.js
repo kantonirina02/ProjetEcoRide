@@ -20,8 +20,6 @@ const $welcome = document.getElementById("account-welcome");
 const $profile = document.getElementById("account-profile");
 const $accName = document.getElementById("acc-name");
 const $accEmail = document.getElementById("acc-email");
-const $accUserId = document.getElementById("acc-userid");
-const $accRoles = document.getElementById("acc-roles");
 const $accCredits = document.getElementById("acc-credits");
 
 const $photoImg = document.getElementById("acc-photo");
@@ -50,6 +48,7 @@ const $vehicleSeats = document.getElementById("acc-vehicle-seats");
 const $vehicleEnergy = document.getElementById("acc-vehicle-energy");
 const $vehicleColor = document.getElementById("acc-vehicle-color");
 const $vehiclePlate = document.getElementById("acc-vehicle-plate");
+const $vehicleFirstReg = document.getElementById("acc-vehicle-firstreg");
 const $vehicleEco = document.getElementById("acc-vehicle-eco");
 const $vehicleReset = document.getElementById("acc-vehicle-reset");
 const $vehicleFeedback = document.getElementById("acc-vehicle-feedback");
@@ -125,7 +124,15 @@ function updatePhotoUI(photoUrl) {
   }
 
   if ($photoPlaceholder) {
-    $photoPlaceholder.style.display = hasPhoto ? "none" : "";
+    const hidden = hasPhoto;
+    $photoPlaceholder.style.display = hidden ? "none" : "";
+    if (hidden) {
+      $photoPlaceholder.classList.add("d-none");
+      $photoPlaceholder.setAttribute("aria-hidden", "true");
+    } else {
+      $photoPlaceholder.classList.remove("d-none");
+      $photoPlaceholder.removeAttribute("aria-hidden");
+    }
   }
 
   if ($photoUpload) {
@@ -156,6 +163,8 @@ function previewLocalPhoto(file) {
       $photoImg.style.display = "";
       if ($photoPlaceholder) {
         $photoPlaceholder.style.display = "none";
+        $photoPlaceholder.classList.add("d-none");
+        $photoPlaceholder.setAttribute("aria-hidden", "true");
       }
       if ($photoUpload) {
         $photoUpload.textContent = "Modifier la photo";
@@ -266,6 +275,19 @@ function formatDateTime(value) {
   }
 }
 
+function formatDate(value) {
+  const date = parseDate(value);
+  if (!date) {
+    return value ?? "";
+  }
+  try {
+    return date.toLocaleDateString("fr-FR");
+  } catch (error) {
+    console.error("Unable to format date", error);
+    return date.toISOString().slice(0, 10);
+  }
+}
+
 function isPast(value) {
   const date = parseDate(value);
   return date ? date.getTime() < Date.now() : false;
@@ -316,6 +338,9 @@ function vehicleCard(vehicle) {
     vehicle?.eco ? "Éco" : null,
     vehicle?.color || null,
     vehicle?.plate || null,
+    vehicle?.firstRegistrationAt
+      ? `Première immatriculation : ${formatDate(vehicle.firstRegistrationAt)}`
+      : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -359,6 +384,7 @@ function renderVehicles() {
       if ($vehicleEnergy) $vehicleEnergy.value = vehicle.energy ?? "";
       if ($vehicleColor) $vehicleColor.value = vehicle.color ?? "";
       if ($vehiclePlate) $vehiclePlate.value = vehicle.plate ?? "";
+      if ($vehicleFirstReg) $vehicleFirstReg.value = vehicle.firstRegistrationAt ? vehicle.firstRegistrationAt.slice(0, 10) : "";
       if ($vehicleEco) $vehicleEco.checked = Boolean(vehicle.eco);
       if ($vehicleFeedback) $vehicleFeedback.textContent = "Modification d'un véhicule existant.";
     });
@@ -393,6 +419,7 @@ function resetVehicleForm() {
   if ($vehicleEnergy) $vehicleEnergy.value = "";
   if ($vehicleColor) $vehicleColor.value = "";
   if ($vehiclePlate) $vehiclePlate.value = "";
+  if ($vehicleFirstReg) $vehicleFirstReg.value = "";
   if ($vehicleEco) $vehicleEco.checked = false;
   if ($vehicleFeedback) $vehicleFeedback.textContent = "";
 }
@@ -533,13 +560,6 @@ async function renderAccount() {
 
     if ($accName) $accName.textContent = overview.user?.pseudo ?? "Utilisateur";
     if ($accEmail) $accEmail.textContent = overview.user?.email ?? "";
-    if ($accUserId) $accUserId.textContent = `#${overview.user?.id ?? ""}`;
-    if ($accRoles) {
-      const roles = Array.isArray(overview.user?.roles)
-        ? overview.user.roles.join(", ")
-        : "";
-      $accRoles.textContent = roles;
-    }
     if ($accCredits) $accCredits.textContent = overview.user?.credits ?? 0;
 
     if ($profile) $profile.classList.remove("d-none");
@@ -720,9 +740,6 @@ $driverToggle?.addEventListener("change", async () => {
     const response = await updateDriverRole({ driver: targetValue });
     if (Array.isArray(response?.roles)) {
       state.user.roles = response.roles;
-      if ($accRoles) {
-        $accRoles.textContent = response.roles.join(", ");
-      }
     }
     if ($driverFeedback) $driverFeedback.textContent = "Rôle mis à jour.";
   } catch (error) {
@@ -761,6 +778,11 @@ $vehicleForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.user) return;
 
+  const plateValue = $vehiclePlate
+    ? $vehiclePlate.value.trim().toUpperCase()
+    : "";
+  const firstRegistrationValue = $vehicleFirstReg ? $vehicleFirstReg.value.trim() : "";
+
   const payload = {
     id: $vehicleId?.value ? Number($vehicleId.value) : undefined,
     brand: $vehicleBrand?.value.trim() ?? "",
@@ -768,7 +790,8 @@ $vehicleForm?.addEventListener("submit", async (event) => {
     seats: Number($vehicleSeats?.value) || 4,
     energy: $vehicleEnergy?.value.trim() || "electric",
     color: $vehicleColor?.value.trim() || null,
-    plate: $vehiclePlate?.value.trim() || null,
+    plate: plateValue || null,
+    firstRegistrationAt: firstRegistrationValue || null,
     eco: Boolean($vehicleEco?.checked),
   };
 

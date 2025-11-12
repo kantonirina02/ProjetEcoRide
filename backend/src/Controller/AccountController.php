@@ -69,29 +69,19 @@ class AccountController extends AbstractController
         $vehicles = $vehicleRepo->findBy(['owner' => $user], ['model' => 'ASC']);
 
         $vehicleData = array_map(static function (Vehicle $vehicle): array {
-
             $brand = $vehicle->getBrand();
 
             return [
-
-                'id'     => $vehicle->getId(),
-
-                'brand'  => $brand?->getName(),
-
-                'model'  => $vehicle->getModel(),
-
-                'energy' => $vehicle->getEnergy(),
-
-                'seats'  => $vehicle->getSeatsTotal(),
-
-                'color'  => $vehicle->getColor(),
-
-                'eco'    => (bool)($vehicle->isEco() ?? false),
-
-                'plate'  => $vehicle->getPlate(),
-
+                'id'                  => $vehicle->getId(),
+                'brand'               => $brand?->getName(),
+                'model'               => $vehicle->getModel(),
+                'energy'              => $vehicle->getEnergy(),
+                'seats'               => $vehicle->getSeatsTotal(),
+                'color'               => $vehicle->getColor(),
+                'eco'                 => (bool)($vehicle->isEco() ?? false),
+                'plate'               => $vehicle->getPlate(),
+                'firstRegistrationAt' => $vehicle->getFirstRegistrationAt()?->format('Y-m-d'),
             ];
-
         }, $vehicles);
 
 
@@ -485,6 +475,10 @@ class AccountController extends AbstractController
         $color     = isset($payload['color']) ? trim((string)$payload['color']) : null;
 
         $plate     = isset($payload['plate']) ? trim((string)$payload['plate']) : null;
+        if ($plate !== null && $plate !== '') {
+            $plate = strtoupper($plate);
+        }
+        $firstRegistrationRaw = isset($payload['firstRegistrationAt']) ? trim((string)$payload['firstRegistrationAt']) : null;
 
         $eco       = (bool)($payload['eco'] ?? false);
 
@@ -508,6 +502,24 @@ class AccountController extends AbstractController
 
             $errors[] = 'energy is required';
 
+        }
+
+        $firstRegistration = null;
+        if ($firstRegistrationRaw !== null && $firstRegistrationRaw !== '') {
+            try {
+                $firstRegistration = new \DateTimeImmutable($firstRegistrationRaw);
+            } catch (\Exception) {
+                $errors[] = 'firstRegistrationAt invalid';
+            }
+        }
+
+        if (!$vehicleId) {
+            if ($plate === null || $plate === '') {
+                $errors[] = 'plate is required';
+            }
+            if ($firstRegistration === null) {
+                $errors[] = 'firstRegistrationAt is required';
+            }
         }
 
         if ($errors) {
@@ -542,7 +554,12 @@ class AccountController extends AbstractController
 
         }
 
-
+        if ($plate !== null && $plate !== '') {
+            $existingPlate = $vehicleRepo->findOneBy(['plate' => $plate]);
+            if ($existingPlate && $existingPlate->getId() !== $vehicle->getId()) {
+                return $this->json(['error' => 'plate already used'], Response::HTTP_CONFLICT);
+            }
+        }
 
         $brandRepo = $em->getRepository(Brand::class);
 
@@ -559,30 +576,20 @@ class AccountController extends AbstractController
 
 
         $vehicle
-
             ->setBrand($brand)
-
             ->setModel($model)
-
             ->setSeatsTotal($seats)
-
             ->setEnergy($energy)
-
             ->setColor($color !== '' ? $color : null)
+            ->setEco($eco);
 
-            ->setEco($eco)
+        $vehicle->setPlate($plate !== '' ? $plate : null);
 
-            ->setPlate($plate !== '' ? $plate : null);
-
-
-
-        if (!$vehicle->getFirstRegistrationAt()) {
-
-            $vehicle->setFirstRegistrationAt(new \DateTimeImmutable('2019-01-01'));
-
+        if ($firstRegistration) {
+            $vehicle->setFirstRegistrationAt($firstRegistration);
+        } elseif (!$vehicle->getFirstRegistrationAt()) {
+            $vehicle->setFirstRegistrationAt(new \DateTimeImmutable('now'));
         }
-
-
 
         $em->persist($vehicle);
 
@@ -596,21 +603,15 @@ class AccountController extends AbstractController
 
             'vehicle' => [
 
-                'id'     => $vehicle->getId(),
-
-                'brand'  => $vehicle->getBrand()?->getName(),
-
-                'model'  => $vehicle->getModel(),
-
-                'seats'  => $vehicle->getSeatsTotal(),
-
-                'energy' => $vehicle->getEnergy(),
-
-                'color'  => $vehicle->getColor(),
-
-                'eco'    => (bool)($vehicle->isEco() ?? false),
-
-                'plate'  => $vehicle->getPlate(),
+                'id'                  => $vehicle->getId(),
+                'brand'               => $vehicle->getBrand()?->getName(),
+                'model'               => $vehicle->getModel(),
+                'seats'               => $vehicle->getSeatsTotal(),
+                'energy'              => $vehicle->getEnergy(),
+                'color'               => $vehicle->getColor(),
+                'eco'                 => (bool)($vehicle->isEco() ?? false),
+                'plate'               => $vehicle->getPlate(),
+                'firstRegistrationAt' => $vehicle->getFirstRegistrationAt()?->format('Y-m-d'),
 
             ],
 
