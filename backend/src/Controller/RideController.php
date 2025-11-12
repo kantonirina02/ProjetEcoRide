@@ -614,7 +614,7 @@ class RideController extends AbstractController
      * Cancel a ride as driver (session user).
      */
     #[Route('/rides/{id<\d+>}/cancel', name: 'ride_cancel', methods: ['POST'])]
-    public function cancelRideAsDriver(int $id, Request $req, EntityManagerInterface $em): JsonResponse
+    public function cancelRideAsDriver(int $id, Request $req, EntityManagerInterface $em, MailerInterface $mailer): JsonResponse
     {
         $driverId = (int)($req->getSession()->get('user_id') ?? 0);
         if ($driverId <= 0) {
@@ -687,6 +687,8 @@ class RideController extends AbstractController
 
             $em->flush();
             $em->commit();
+
+            $this->notifyRideCancellation($ride, $participants, $mailer);
 
             return $this->json([
                 'ok'      => true,
@@ -1310,6 +1312,37 @@ class RideController extends AbstractController
                 $mailer->send($email);
             } catch (Throwable) {
                 // Ignorer l'erreur d'envoi pour ne pas casser le flux principal.
+            }
+        }
+    }
+
+    private function notifyRideCancellation(array $participants, MailerInterface $mailer): void
+    {
+        foreach ($participants as $participant) {
+            if (!$participant instanceof RideParticipant) {
+                continue;
+            }
+            $user = $participant->getUser();
+            if (!$user || !$user->getEmail()) {
+                continue;
+            }
+
+            $ride = $participant->getRide();
+            $email = (new Email())
+                ->to($user->getEmail())
+                ->subject('EcoRide - Trajet annulé')
+                ->text(sprintf(
+                    "Bonjour %s,\n\nLe conducteur a annulé le trajet %s -> %s prévu le %s.\nLes crédits utilisés vous seront recrédités automatiquement.\n\nMerci de rechercher un autre covoiturage sur EcoRide.",
+                    $user->getPseudo() ?? 'covoitureur',
+                    $ride?->getFromCity() ?? '?',
+                    $ride?->getToCity() ?? '?',
+                    $ride?->getStartAt()?->format('Y-m-d H:i') ?? 'date inconnue'
+                ));
+
+            try {
+                $mailer->send($email);
+            } catch (Throwable) {
+                // ignorer erreur
             }
         }
     }

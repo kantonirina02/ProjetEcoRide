@@ -5,6 +5,7 @@ import {
   moderateReview,
   suspendUser,
   createEmployeeAccount,
+  fetchSearchLogs,
 } from "../api.js";
 
 const $error = document.getElementById("admin-error");
@@ -16,6 +17,8 @@ const $reviewsContainer = document.getElementById("admin-reviews");
 const $reviewsFeedback = document.getElementById("admin-reviews-feedback");
 const $usersContainer = document.getElementById("admin-users");
 const $usersFeedback = document.getElementById("admin-users-feedback");
+const $logsContainer = document.getElementById("admin-searchlogs");
+const $logsFeedback = document.getElementById("admin-searchlogs-feedback");
 
 const $statusSelect = document.getElementById("admin-review-status");
 const $refreshButton = document.getElementById("admin-refresh");
@@ -33,6 +36,7 @@ const state = {
   revenueDays: [],
   platformCredits: 0,
   periodRevenue: 0,
+  searchLogs: [],
 };
 
 function resetAlerts() {
@@ -251,6 +255,32 @@ function renderUsers() {
   });
 }
 
+function renderSearchLogs() {
+  if (!$logsContainer || !$logsFeedback) return;
+  if (!state.searchLogs.length) {
+    $logsContainer.innerHTML = "";
+    $logsFeedback.textContent = "Aucune recherche récente.";
+    return;
+  }
+
+  $logsFeedback.textContent = "";
+  $logsContainer.innerHTML = state.searchLogs
+    .map(
+      (log) => `
+        <tr>
+          <td>${log.createdAt ?? "-"}</td>
+          <td>${log.from ?? "-"}</td>
+          <td>${log.to ?? "-"}</td>
+          <td>${log.date ?? "-"}</td>
+          <td>${log.results ?? 0}</td>
+          <td>${log.userId ?? "Visiteur"}</td>
+          <td>${log.clientIp ?? "-"}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
 async function handleReviewDecision(id, action) {
   const card = document.querySelector(`button[data-id="${id}"]`)?.closest(".card");
   const noteInput = card?.querySelector(".js-note");
@@ -308,6 +338,20 @@ async function loadMetrics() {
   }
 }
 
+async function loadSearchLogs() {
+  if (!$logsFeedback) return;
+  $logsFeedback.textContent = "Chargement des recherches...";
+  try {
+    const payload = await fetchSearchLogs();
+    state.searchLogs = payload?.logs ?? [];
+    renderSearchLogs();
+  } catch (error) {
+    console.error(error);
+    $logsFeedback.textContent = "";
+    showError("Erreur lors du chargement des recherches.");
+  }
+}
+
 async function loadReviews() {
   $reviewsFeedback.textContent = "Chargement des avis...";
   try {
@@ -325,7 +369,7 @@ async function init() {
   resetAlerts();
   const ok = await ensureAdmin();
   if (!ok) return;
-  await Promise.all([loadMetrics(), loadReviews()]);
+  await Promise.all([loadMetrics(), loadReviews(), loadSearchLogs()]);
 }
 
 $statusSelect?.addEventListener("change", () => {

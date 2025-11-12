@@ -292,6 +292,14 @@ export async function createEmployeeAccount({ email, pseudo, password }) {
   return json(res);
 }
 
+export async function fetchSearchLogs() {
+  const res = await fetch(`${API_BASE}/admin/search-logs`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
 /* ---------- My bookings / rides ---------- */
 export async function fetchMyBookings() {
   const res = await fetch(`${API_BASE}/me/bookings`, {

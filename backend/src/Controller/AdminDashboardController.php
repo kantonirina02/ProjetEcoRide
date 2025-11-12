@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Document\SearchLog;
 use App\Entity\Ride;
 use App\Entity\RideParticipant;
 use App\Entity\User;
 use DateTimeImmutable;
+use Doctrine\ODM\MongoDB\DocumentManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,6 +20,7 @@ use Symfony\Component\Routing\Annotation\Route;
 class AdminDashboardController extends AbstractController
 {
     private const PLATFORM_FEE = 2;
+    public function __construct(private readonly DocumentManager $documentManager) {}
 
     #[Route('/metrics', name: 'metrics', methods: ['GET'])]
     public function metrics(Request $request, EntityManagerInterface $em): JsonResponse
@@ -325,5 +328,46 @@ class AdminDashboardController extends AbstractController
                 'roles'  => $user->getRoles(),
             ],
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/search-logs', name: 'search_logs', methods: ['GET'])]
+    public function searchLogs(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $uid = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($uid <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var User|null $admin */
+        $admin = $em->getRepository(User::class)->find($uid);
+        if (!$admin || !in_array('ROLE_ADMIN', $admin->getRoles(), true)) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        $logs = $this->documentManager
+            ->createQueryBuilder(SearchLog::class)
+            ->sort('createdAt', 'DESC')
+            ->limit(50)
+            ->getQuery()
+            ->execute();
+
+        $data = [];
+        foreach ($logs as $log) {
+            if (!$log instanceof SearchLog) {
+                continue;
+            }
+            $data[] = [
+                'from'        => $log->getFrom(),
+                'to'          => $log->getTo(),
+                'date'        => $log->getDate(),
+                'results'     => $log->getResultCount(),
+                'userId'      => $log->getUserId(),
+                'clientIp'    => $log->getClientIp(),
+                'userAgent'   => $log->getUserAgent(),
+                'createdAt'   => $log->getCreatedAt()?->format('Y-m-d H:i'),
+            ];
+        }
+
+        return $this->json(['logs' => $data]);
     }
 }
