@@ -3,6 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\Review;
+use App\Entity\RideParticipant;
+use App\Entity\Ride;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -136,5 +138,73 @@ class ModerationController extends AbstractController
     {
         $roles = $user->getRoles();
         return in_array('ROLE_ADMIN', $roles, true) || in_array('ROLE_EMPLOYEE', $roles, true);
+    }
+
+    #[Route('/issues', name: 'issues_list', methods: ['GET'])]
+    public function rideIssues(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $uid = (int)($request->getSession()->get('user_id') ?? 0);
+        if ($uid <= 0) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var User|null $moderator */
+        $moderator = $em->getRepository(User::class)->find($uid);
+        if (!$moderator || !$this->isGrantedForModeration($moderator)) {
+            return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
+        }
+
+        $issues = $em->createQueryBuilder()
+            ->select('rp', 'ride', 'driver', 'passenger', 'vehicle')
+            ->from(RideParticipant::class, 'rp')
+            ->join('rp.ride', 'ride')
+            ->join('ride.driver', 'driver')
+            ->leftJoin('rp.user', 'passenger')
+            ->leftJoin('ride.vehicle', 'vehicle')
+            ->where('rp.feedbackStatus = :issue')
+            ->orderBy('rp.feedbackAt', 'DESC')
+            ->setParameter('issue', 'issue')
+            ->getQuery()
+            ->getResult();
+
+        $data = array_map(static function (RideParticipant $participant): array {
+            $ride = $participant->getRide();
+            $driver = $ride?->getDriver();
+            $passenger = $participant->getUser();
+            $vehicle = $ride?->getVehicle();
+
+            return [
+                'ride' => [
+                    'id'      => $ride?->getId(),
+                    'from'    => $ride?->getFromCity(),
+                    'to'      => $ride?->getToCity(),
+                    'startAt' => $ride?->getStartAt()?->format('Y-m-d H:i'),
+                    'endAt'   => $ride?->getEndAt()?->format('Y-m-d H:i'),
+                    'status'  => $ride?->getStatus(),
+                    'vehicle' => $vehicle ? [
+                        'brand' => $vehicle->getBrand()?->getName(),
+                        'model' => $vehicle->getModel(),
+                        'plate' => $vehicle->getPlate(),
+                    ] : null,
+                ],
+                'driver' => $driver ? [
+                    'id'     => $driver->getId(),
+                    'pseudo' => $driver->getPseudo(),
+                    'email'  => $driver->getEmail(),
+                ] : null,
+                'passenger' => $passenger ? [
+                    'id'     => $passenger->getId(),
+                    'pseudo' => $passenger->getPseudo(),
+                    'email'  => $passenger->getEmail(),
+                ] : null,
+                'feedback' => [
+                    'status' => $participant->getFeedbackStatus(),
+                    'note'   => $participant->getFeedbackNote(),
+                    'date'   => $participant->getFeedbackAt()?->format('Y-m-d H:i'),
+                ],
+            ];
+        }, $issues);
+
+        return $this->json(['issues' => $data]);
     }
 }

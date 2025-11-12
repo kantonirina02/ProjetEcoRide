@@ -274,6 +274,14 @@ export async function suspendUser(id, { suspend = true, reason } = {}) {
   return json(res);
 }
 
+export async function fetchRideIssues() {
+  const res = await fetch(`${API_BASE}/moderation/issues`, {
+    headers: { Accept: "application/json" },
+    credentials: "include",
+  });
+  return json(res);
+}
+
 /* ---------- My bookings / rides ---------- */
 export async function fetchMyBookings() {
   const res = await fetch(`${API_BASE}/me/bookings`, {

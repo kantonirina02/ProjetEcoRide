@@ -1,4 +1,4 @@
-import { me, fetchModerationReviews, moderateReview } from "../api.js";
+import { me, fetchModerationReviews, moderateReview, fetchRideIssues } from "../api.js";
 
 const $error = document.getElementById("employee-error");
 const $success = document.getElementById("employee-success");
@@ -6,10 +6,13 @@ const $reviews = document.getElementById("employee-reviews");
 const $reviewsFeedback = document.getElementById("employee-reviews-feedback");
 const $statusSelect = document.getElementById("employee-status");
 const $refresh = document.getElementById("employee-refresh");
+const $issues = document.getElementById("employee-issues");
+const $issuesFeedback = document.getElementById("employee-issues-feedback");
 
 const state = {
   status: "pending",
   reviews: [],
+  issues: [],
 };
 
 function showError(message) {
@@ -130,10 +133,70 @@ async function loadReviews() {
   }
 }
 
+function issueCard(issue) {
+  const driver = issue.driver || {};
+  const passenger = issue.passenger || {};
+  const ride = issue.ride || {};
+  const feedback = issue.feedback || {};
+  const vehicle = ride.vehicle
+    ? `${ride.vehicle.brand ?? ""} ${ride.vehicle.model ?? ""}`.trim()
+    : "";
+
+  return `
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-3">
+          <div>
+            <div class="fw-semibold">Trajet #${ride.id ?? "-"} : ${ride.from ?? "?"} &rarr; ${ride.to ?? "?"}</div>
+            <div class="small text-muted">
+              Départ : ${ride.startAt ?? "-"}${ride.endAt ? ` &middot; Arrivée : ${ride.endAt}` : ""}
+            </div>
+            ${vehicle ? `<div class="small text-muted">Véhicule : ${vehicle}${ride.vehicle?.plate ? ` (${ride.vehicle.plate})` : ""}</div>` : ""}
+            <div class="mt-2">
+              <strong>Conducteur :</strong> ${driver.pseudo ?? "-"} <span class="text-muted">${driver.email ?? ""}</span>
+            </div>
+            <div class="mt-1">
+              <strong>Passager :</strong> ${passenger.pseudo ?? "-"} <span class="text-muted">${passenger.email ?? ""}</span>
+            </div>
+          </div>
+          <div class="text-end">
+            <span class="badge text-bg-danger text-uppercase">Problème signalé</span>
+            <div class="small text-muted mt-2">${feedback.date ?? ""}</div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <strong>Description :</strong>
+          <div class="mt-1">${feedback.note ? feedback.note : "<em>Aucun détail fourni.</em>"}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadIssues() {
+  if (!$issues || !$issuesFeedback) return;
+  $issuesFeedback.textContent = "Chargement des trajets signalés...";
+  try {
+    const payload = await fetchRideIssues();
+    state.issues = payload?.issues ?? [];
+    if (!state.issues.length) {
+      $issues.innerHTML = "";
+      $issuesFeedback.textContent = "Aucun trajet signalé.";
+      return;
+    }
+    $issuesFeedback.textContent = "";
+    $issues.innerHTML = state.issues.map(issueCard).join("");
+  } catch (error) {
+    console.error(error);
+    $issuesFeedback.textContent = "";
+    showError("Erreur lors du chargement des trajets signalés.");
+  }
+}
+
 async function init() {
   const ok = await ensureEmployee();
   if (!ok) return;
-  await loadReviews();
+  await Promise.all([loadReviews(), loadIssues()]);
 }
 
 $statusSelect?.addEventListener("change", () => {
@@ -143,6 +206,7 @@ $statusSelect?.addEventListener("change", () => {
 
 $refresh?.addEventListener("click", () => {
   loadReviews();
+  loadIssues();
 });
 
 init();
