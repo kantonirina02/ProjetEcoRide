@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 
 
@@ -198,12 +198,12 @@ class AccountController extends AbstractController
 
         $mime = (string) $file->getMimeType();
 
-        if ($mime === '' || !str_starts_with($mime, 'image/')) {
+        $allowed = ['image/jpeg', 'image/png', 'image/jpg'];
+        if ($mime === '' || !in_array(strtolower($mime), $allowed, true)) {
 
-            return $this->json(['error' => 'Le fichier doit être une image'], Response::HTTP_UNSUPPORTED_MEDIA_TYPE);
+            return $this->json(['error' => 'Le fichier doit être une image JPG ou PNG'], Response::HTTP_UNSUPPORTED_MEDIA_TYPE);
 
         }
-
         $size = $file->getSize() ?? 0;
 
         if ($size > 5 * 1024 * 1024) {
@@ -218,7 +218,7 @@ class AccountController extends AbstractController
 
         if ($content === false) {
 
-            return $this->json(['error' => 'Impossible de lire le fichier téléchargé'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json(['error' => 'Impossible de lire le fichier tÃ©lÃ©chargÃ©'], Response::HTTP_INTERNAL_SERVER_ERROR);
 
         }
 
