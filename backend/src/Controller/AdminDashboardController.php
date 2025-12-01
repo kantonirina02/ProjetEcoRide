@@ -20,7 +20,7 @@ use Symfony\Component\Routing\Annotation\Route;
 class AdminDashboardController extends AbstractController
 {
     private const PLATFORM_FEE = 2;
-    public function __construct(private readonly DocumentManager $documentManager) {}
+    public function __construct(private readonly ?DocumentManager $documentManager = null) {}
 
     #[Route('/metrics', name: 'metrics', methods: ['GET'])]
     public function metrics(Request $request, EntityManagerInterface $em): JsonResponse
@@ -39,6 +39,8 @@ class AdminDashboardController extends AbstractController
         // Fenêtre : 6 derniers mois (inclus)
         $start = (new DateTimeImmutable('first day of this month'))->modify('-5 months');
         $cursor = clone $start;
+        $revenueStart = (new DateTimeImmutable("today"))->modify("-13 days");
+        $dayCursor = $revenueStart;
 
         $months = [];
         for ($i = 0; $i < 6; $i++) {
@@ -50,6 +52,19 @@ class AdminDashboardController extends AbstractController
                 'signups'  => 0,
             ];
             $cursor = $cursor->modify('+1 month');
+        }
+
+        // Compteurs journaliers (14 derniers jours)
+        $dailyRides = [];
+        $dayCursor = $revenueStart;
+        for ($i = 0; $i < 14; $i++) {
+            $key = $dayCursor->format('Y-m-d');
+            $dailyRides[$key] = [
+                'date'  => $key,
+                'label' => $dayCursor->format('d/m'),
+                'count' => 0,
+            ];
+            $dayCursor = $dayCursor->modify('+1 day');
         }
 
         $rides = $em->createQueryBuilder()
@@ -69,6 +84,10 @@ class AdminDashboardController extends AbstractController
                 $key = $date->format('Y-m');
                 if (isset($months[$key])) {
                     $months[$key]['rides']++;
+                }
+                $dayKey = $date->format('Y-m-d');
+                if (isset($dailyRides[$dayKey]) && $date >= $revenueStart) {
+                    $dailyRides[$dayKey]['count']++;
                 }
             }
         }
@@ -217,6 +236,7 @@ class AdminDashboardController extends AbstractController
         return $this->json([
             'series'                 => array_values($months),
             'users'                  => $userList,
+            'dailyRideCounts'        => array_values($dailyRides),
             'revenueDays'            => array_values($dailyRevenue),
             'periodRevenue'          => $periodRevenueTotal,
             'platformTotalCredits'   => $platformTotal,
@@ -344,30 +364,38 @@ class AdminDashboardController extends AbstractController
             return $this->json(['error' => 'Forbidden'], Response::HTTP_FORBIDDEN);
         }
 
-        $logs = $this->documentManager
-            ->createQueryBuilder(SearchLog::class)
-            ->sort('createdAt', 'DESC')
-            ->limit(50)
-            ->getQuery()
-            ->execute();
-
-        $data = [];
-        foreach ($logs as $log) {
-            if (!$log instanceof SearchLog) {
-                continue;
-            }
-            $data[] = [
-                'from'        => $log->getFrom(),
-                'to'          => $log->getTo(),
-                'date'        => $log->getDate(),
-                'results'     => $log->getResultCount(),
-                'userId'      => $log->getUserId(),
-                'clientIp'    => $log->getClientIp(),
-                'userAgent'   => $log->getUserAgent(),
-                'createdAt'   => $log->getCreatedAt()?->format('Y-m-d H:i'),
-            ];
+        if (!$this->documentManager) {
+            return $this->json(['logs' => []]);
         }
 
-        return $this->json(['logs' => $data]);
+        try {
+            $logs = $this->documentManager
+                ->createQueryBuilder(SearchLog::class)
+                ->sort('createdAt', 'DESC')
+                ->limit(50)
+                ->getQuery()
+                ->execute();
+
+            $data = [];
+            foreach ($logs as $log) {
+                if (!$log instanceof SearchLog) {
+                    continue;
+                }
+                $data[] = [
+                    'from'        => $log->getFrom(),
+                    'to'          => $log->getTo(),
+                    'date'        => $log->getDate(),
+                    'results'     => $log->getResultCount(),
+                    'userId'      => $log->getUserId(),
+                    'clientIp'    => $log->getClientIp(),
+                    'userAgent'   => $log->getUserAgent(),
+                    'createdAt'   => $log->getCreatedAt()?->format('Y-m-d H:i'),
+                ];
+            }
+
+            return $this->json(['logs' => $data]);
+        } catch (\Throwable) {
+            return $this->json(['logs' => []]);
+        }
     }
 }

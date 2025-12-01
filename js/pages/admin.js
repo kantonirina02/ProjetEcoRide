@@ -33,6 +33,7 @@ const state = {
   reviews: [],
   users: [],
   reviewStatus: "pending",
+  dailyRides: [],
   revenueDays: [],
   platformCredits: 0,
   periodRevenue: 0,
@@ -79,68 +80,51 @@ function ensureAdmin() {
 }
 
 function renderMetrics() {
-  if (!state.metrics.length) {
+  const ridesDaily = state.dailyRides;
+  const revenueDaily = state.revenueDays;
+
+  if (!ridesDaily.length && !revenueDaily.length) {
     $metricsContainer.innerHTML = "";
-    $metricsFeedback.textContent = "Aucune donnée disponible.";
+    $metricsFeedback.textContent = "Aucune donnee disponible.";
     return;
   }
 
   $metricsFeedback.textContent = "";
 
-  const maxRides = Math.max(...state.metrics.map((m) => m.rides), 1);
-  const maxBookings = Math.max(...state.metrics.map((m) => m.bookings), 1);
-  const maxSignups = Math.max(...state.metrics.map((m) => m.signups), 1);
+  let html = "";
 
-  const toBar = (value, max) => {
-    const percent = Math.round((value / max) * 100);
-    return `<div class="chart-bar bg-primary" style="height:${percent || 5}px" title="${value}"></div>`;
-  };
-
-  const barsRides = state.metrics.map((m) => toBar(m.rides, maxRides)).join("");
-  const barsBookings = state.metrics.map((m) => toBar(m.bookings, maxBookings)).join("");
-  const barsSignups = state.metrics.map((m) => toBar(m.signups, maxSignups)).join("");
-  const labels = state.metrics.map((m) => `<div class="chart-label">${m.label}</div>`).join("");
-
-  let html = `
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h4 class="h6">Trajets publiés</h4>
-          <div class="chart-stack">${barsRides}</div>
-          <div class="d-flex justify-content-between">${labels}</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h4 class="h6">Réservations</h4>
-          <div class="chart-stack text-bg-success">${barsBookings}</div>
-          <div class="d-flex justify-content-between">${labels}</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h4 class="h6">Inscriptions</h4>
-          <div class="chart-stack text-bg-info">${barsSignups}</div>
-          <div class="d-flex justify-content-between">${labels}</div>
-        </div>
-      </div>
-    </div>
-  `;
-  if (state.revenueDays.length) {
-    const maxRevenue = Math.max(...state.revenueDays.map((d) => d.credits), 1);
-    const revenueBars = state.revenueDays
+  if (ridesDaily.length) {
+    const maxRides = Math.max(...ridesDaily.map((d) => d.count || 0), 1);
+    const bars = ridesDaily
       .map((day) => {
-        const percent = Math.round((day.credits / maxRevenue) * 100);
-        return `<div class="chart-bar bg-warning" style="height:${percent || 5}px" title="${day.credits}"></div>`;
+        const percent = Math.round(((day.count || 0) / maxRides) * 100);
+        return `<div class="chart-bar bg-success" style="height:${percent || 5}px" title="${day.count || 0}"></div>`;
       })
       .join("");
-    const revenueLabels = state.revenueDays
-      .map((day) => `<div class="chart-label">${day.label}</div>`)
+    const labels = ridesDaily.map((day) => `<div class="chart-label">${day.label}</div>`).join("");
+
+    html += `
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h4 class="h6">Covoiturages par jour (14 derniers jours)</h4>
+            <div class="chart-stack text-bg-success">${bars}</div>
+            <div class="d-flex justify-content-between">${labels}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (revenueDaily.length) {
+    const maxRevenue = Math.max(...revenueDaily.map((d) => d.credits || 0), 1);
+    const bars = revenueDaily
+      .map((day) => {
+        const percent = Math.round(((day.credits || 0) / maxRevenue) * 100);
+        return `<div class="chart-bar bg-warning" style="height:${percent || 5}px" title="${day.credits || 0}"></div>`;
+      })
       .join("");
+    const labels = revenueDaily.map((day) => `<div class="chart-label">${day.label}</div>`).join("");
     const totalCredits = Number(state.platformCredits || 0).toLocaleString("fr-FR");
     const periodCredits = Number(state.periodRevenue || 0).toLocaleString("fr-FR");
 
@@ -148,19 +132,19 @@ function renderMetrics() {
       <div class="col-12 col-lg-6">
         <div class="card shadow-sm h-100">
           <div class="card-body">
-            <h4 class="h6">Crédits plateforme (14 derniers jours)</h4>
-            <div class="chart-stack text-bg-warning">${revenueBars}</div>
-            <div class="d-flex justify-content-between">${revenueLabels}</div>
-            <div class="small text-muted mt-2">Total période : ${periodCredits} crédits</div>
+            <h4 class="h6">Credits gagnes par jour (14 derniers jours)</h4>
+            <div class="chart-stack text-bg-warning">${bars}</div>
+            <div class="d-flex justify-content-between">${labels}</div>
+            <div class="small text-muted mt-2">Total periode : ${periodCredits} credits</div>
           </div>
         </div>
       </div>
-      <div class="col-12 col-lg-6">
-        <div class="card shadow-sm h-100">
+      <div class="col-12">
+        <div class="card shadow-sm h-100 mt-3">
           <div class="card-body d-flex flex-column justify-content-center align-items-start">
-            <h4 class="h6">Crédits cumulés</h4>
+            <h4 class="h6">Credits cumules plateforme</h4>
             <p class="display-6 mb-1">${totalCredits}</p>
-            <div class="small text-muted">Somme encaissée par la plateforme depuis l'ouverture.</div>
+            <div class="small text-muted">Somme encaissee par la plateforme depuis l'ouverture.</div>
           </div>
         </div>
       </div>
@@ -326,6 +310,7 @@ async function loadMetrics() {
     const payload = await fetchAdminMetrics();
     state.metrics = payload?.series ?? [];
     state.users = payload?.users ?? [];
+    state.dailyRides = payload?.dailyRideCounts ?? [];
     state.revenueDays = payload?.revenueDays ?? [];
     state.periodRevenue = payload?.periodRevenue ?? 0;
     state.platformCredits = payload?.platformTotalCredits ?? 0;

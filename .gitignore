@@ -26,6 +26,7 @@ pnpm-debug.log*
 /backend/.env.local
 /backend/.env.*.local
 /backend/.phpunit.result.cache
+/backend/mongo-data/
 
 # OS / IDE
 .idea/
