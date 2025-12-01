@@ -6,6 +6,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git unzip \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
+# Env par défaut pour le build (seront écrasées par Render)
+ENV APP_ENV=prod \
+    APP_SECRET=change-me \
+    DATABASE_URL=sqlite:///var/data.db \
+    MAILER_DSN=null://null \
+    CORS_ALLOW_ORIGIN=*
+
 # Copier les fichiers backend (le contexte de build doit être "backend")
 COPY . ./
 
