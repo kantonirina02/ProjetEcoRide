@@ -1,4 +1,4 @@
-import { fetchRide, bookRide, unbookRide, me } from "../api.js";
+﻿import { fetchRide, bookRide, unbookRide, me } from "../api.js";
 
 const $err = document.getElementById("ride-error");
 const $auth = document.getElementById("ride-auth");
@@ -286,3 +286,4 @@ async function render() {
 }
 
 render();
+

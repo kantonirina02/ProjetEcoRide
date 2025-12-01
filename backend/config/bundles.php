@@ -1,6 +1,6 @@
-<?php
+﻿<?php
 
-return [
+$bundles = [
     Symfony\Bundle\FrameworkBundle\FrameworkBundle::class => ['all' => true],
     Doctrine\Bundle\DoctrineBundle\DoctrineBundle::class => ['all' => true],
     Doctrine\Bundle\MigrationsBundle\DoctrineMigrationsBundle::class => ['all' => true],
@@ -14,6 +14,12 @@ return [
     Symfony\Bundle\MonologBundle\MonologBundle::class => ['all' => true],
     Symfony\Bundle\MakerBundle\MakerBundle::class => ['dev' => true],
     Nelmio\CorsBundle\NelmioCorsBundle::class => ['all' => true],
-    Doctrine\Bundle\MongoDBBundle\DoctrineMongoDBBundle::class => ['all' => true],
     Doctrine\Bundle\FixturesBundle\DoctrineFixturesBundle::class => ['dev' => true, 'test' => true],
 ];
+
+// MongoDB bundle chargé uniquement si l'extension est disponible (utile en dev/local sans ext-mongodb)
+if (extension_loaded('mongodb')) {
+    $bundles[\Doctrine\Bundle\MongoDBBundle\DoctrineMongoDBBundle::class] = ['all' => true];
+}
+
+return $bundles;

@@ -1,4 +1,4 @@
-import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
+﻿import { fetchRides, bookRide, fetchMyBookings } from "../api.js";
 
 const getSession = () => window.__session ?? null;
 
@@ -265,3 +265,4 @@ if (resetBtn) {
     render();
   });
 }
+

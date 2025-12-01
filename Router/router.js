@@ -1,4 +1,4 @@
-import Route from "./Route.js";
+﻿import Route from "./Route.js";
 import { allRoutes, websiteName } from "./allRoutes.js";
 import { getSession } from "../js/auth/session.js";
 
@@ -97,3 +97,4 @@ window.addEventListener("session:changed", applyAuthVisibility);
 
 // 1er rendu
 LoadContentPage();
+

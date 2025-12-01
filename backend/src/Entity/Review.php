@@ -24,7 +24,7 @@ class Review
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?User $target = null;
 
-    #[ORM\ManyToOne(targetEntity: Ride::class)]
+    #[ORM\ManyToOne(targetEntity: Ride::class, inversedBy: 'reviews')]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Ride $ride = null;
 

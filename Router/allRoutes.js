@@ -1,4 +1,4 @@
-import Route from "./Route.js";
+﻿import Route from "./Route.js";
 
 // Définir ici vos routes
 export const allRoutes = [
@@ -17,3 +17,4 @@ export const allRoutes = [
 
 // Le titre s'affiche comme ceci : Route.titre - websitename
 export const websiteName = "EcoRide";
+

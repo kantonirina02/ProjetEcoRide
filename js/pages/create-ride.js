@@ -1,4 +1,4 @@
-import { createRide, fetchMyVehicles, me, API_BASE } from "../api.js";
+﻿import { createRide, fetchMyVehicles, me, API_BASE } from "../api.js";
 import { getSession } from "../auth/session.js";
 
 const PLATFORM_FEE = 2;
@@ -233,6 +233,7 @@ if ($btn) {
     showErr("Serveur API indisponible (port 8001). Lancez le backend puis reessayez.");
   }
 })();
+
 
 
 

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const form = document.getElementById("search-form");
   if (!form) return;
 
@@ -25,3 +25,4 @@
     a.remove();
   });
 })();
+

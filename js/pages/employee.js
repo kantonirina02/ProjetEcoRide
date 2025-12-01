@@ -1,4 +1,4 @@
-import { me, fetchModerationReviews, moderateReview, fetchRideIssues } from "../api.js";
+﻿import { me, fetchModerationReviews, moderateReview, fetchRideIssues } from "../api.js";
 
 const $error = document.getElementById("employee-error");
 const $success = document.getElementById("employee-success");
@@ -210,3 +210,4 @@ $refresh?.addEventListener("click", () => {
 });
 
 init();
+

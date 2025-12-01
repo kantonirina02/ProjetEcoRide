@@ -9,8 +9,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 final class SearchLogger
 {
     public function __construct(
-        private readonly DocumentManager $dm,
-        private readonly RequestStack $stack
+        private readonly RequestStack $stack,
+        private readonly ?DocumentManager $dm = null
     ) {}
 
     /**
@@ -24,6 +24,9 @@ final class SearchLogger
         ?int $userId = null
     ): void {
         try {
+            if (!$this->dm instanceof DocumentManager) {
+                return; // MongoDB non dispo en local
+            }
             $req = $this->stack->getCurrentRequest();
 
             $log = (new SearchLog())

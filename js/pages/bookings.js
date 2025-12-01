@@ -1,4 +1,4 @@
-import { fetchMyBookings, unbookRide, me } from "../api.js";
+﻿import { fetchMyBookings, unbookRide, me } from "../api.js";
 
 const $err      = document.getElementById("bookings-error");
 const $feedback = document.getElementById("bookings-feedback");
@@ -122,3 +122,4 @@ async function render(){
 }
 
 render();
+

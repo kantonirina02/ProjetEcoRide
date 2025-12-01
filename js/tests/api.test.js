@@ -145,3 +145,4 @@ test("cancelRideAsDriver posts cancellation", async () => {
   assert.equal(options.method, "POST");
   assert.equal(options.credentials, "include");
 });
+

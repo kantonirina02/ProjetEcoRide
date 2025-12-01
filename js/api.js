@@ -1,4 +1,4 @@
-const normalizeBase = (value) => {
+﻿const normalizeBase = (value) => {
   if (!value) return null;
   const trimmed = value.trim().replace(/\/+$/, "");
   if (trimmed === "") {
@@ -362,3 +362,4 @@ export async function fetchRide(id) {
   });
   return json(res);
 }
+

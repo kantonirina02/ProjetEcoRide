@@ -1,4 +1,4 @@
-const KEY = "ecoride_session";
+﻿const KEY = "ecoride_session";
 
 export function getSession() {
   try { return JSON.parse(localStorage.getItem(KEY)) || null; }
@@ -19,3 +19,4 @@ export function clearSession() {
 
 // hydrate en mémoire au chargement
 window.__session = getSession();
+

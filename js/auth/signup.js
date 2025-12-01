@@ -1,4 +1,4 @@
-import { API_BASE, me } from "../api.js";
+﻿import { API_BASE, me } from "../api.js";
 
 const $form = document.getElementById("signup-form");
 const $btn  = document.getElementById("btn-validation-inscription");
@@ -159,3 +159,4 @@ async function onSubmit(e){
 }
 
 if ($form) $form.addEventListener("submit", onSubmit);
+
