@@ -19,5 +19,8 @@ COPY . ./
 # Installer les dépendances PHP (ignore ext-mongodb, sans exécuter les scripts pendant le build)
 RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-mongodb --no-scripts
 
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 8000
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "public/index.php"]
+CMD ["/app/docker-entrypoint.sh"]
