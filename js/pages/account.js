@@ -101,6 +101,7 @@ function setPhotoFeedback(message = "", isError = false) {
   $photoFeedback.textContent = message;
   $photoFeedback.classList.toggle("text-danger", Boolean(message) && isError);
   $photoFeedback.classList.toggle("text-muted", !message || !isError);
+  $photoFeedback.classList.toggle("fw-semibold", Boolean(message) && isError);
 }
 
 function resolvePhotoUrl(photo) {
@@ -214,14 +215,21 @@ $photoInput?.addEventListener("change", async () => {
       state.user.photo = photo;
     }
     updatePhotoUI(photo);
-    setPhotoFeedback("Photo mise a jour.");
+    setPhotoFeedback("Photo mise à jour.");
   } catch (error) {
     console.error(error);
     updatePhotoUI(previousPhoto);
-    const message =
-      typeof error?.message === "string" && error.message.trim()
-        ? error.message
-        : "Echec de l'envoi de la photo (formats JPG ou PNG, 5 Mo maximum).";
+    const raw = typeof error?.message === "string" ? error.message.trim() : "";
+    let message = "Échec de l'envoi (JPG/PNG, 5 Mo max).";
+    if (raw) {
+      if (raw.includes("upload_max_filesize")) {
+        message = "Fichier trop volumineux : 5 Mo maximum.";
+      } else if (raw.toLowerCase().includes("invalid") || raw.toLowerCase().includes("fichier")) {
+        message = "Fichier invalide : uniquement JPG ou PNG.";
+      } else {
+        message = raw;
+      }
+    }
     setPhotoFeedback(message, true);
   } finally {
     if ($photoInput) {
