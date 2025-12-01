@@ -16,8 +16,8 @@ ENV APP_ENV=prod \
 # Copier les fichiers backend (le contexte de build doit être "backend")
 COPY . ./
 
-# Installer les dépendances PHP (ignore ext-mongodb pour l'environnement sans extension)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-mongodb
+# Installer les dépendances PHP (ignore ext-mongodb, sans exécuter les scripts pendant le build)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-mongodb --no-scripts
 
 EXPOSE 8000
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "public/index.php"]
