@@ -169,12 +169,15 @@ async function render() {
       ratingMin: ratingParam ?? undefined,
     });
 
-    const rides = Array.isArray(result?.rides)
+    let rides = Array.isArray(result?.rides)
       ? result.rides
       : Array.isArray(result)
       ? result
       : [];
     const suggestion = result?.suggestion ?? null;
+
+    // US3 : seuls les trajets avec au moins une place disponible sont affichés
+    rides = rides.filter((ride) => (ride?.seatsLeft ?? 0) > 0);
 
     if (rides.length === 0) {
       $list.innerHTML = "";

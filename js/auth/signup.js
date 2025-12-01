@@ -1,6 +1,4 @@
-import { me } from "../api.js";
-
-const API = "http://localhost:8001/api";
+import { API_BASE, me } from "../api.js";
 
 const $form = document.getElementById("signup-form");
 const $btn  = document.getElementById("btn-validation-inscription");
@@ -24,7 +22,7 @@ function debounce(fn, delay=400){
 }
 
 async function signup(payload){
-  const res = await fetch(`${API}/auth/register`, {
+  const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "include",
@@ -47,7 +45,7 @@ async function checkEmailAvailability(email){
   if (!$emailHint) return;
   $email.classList.remove("is-valid","is-invalid");
   $emailHint.classList.remove("text-success","text-danger");
-  $emailHint.textContent = "";
+  $emailHint.textContent = "...";
 
   const fmtOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   if (!fmtOk) {
@@ -60,7 +58,7 @@ async function checkEmailAvailability(email){
   }
 
   try {
-    const res = await fetch(`${API}/auth/check-email?email=${encodeURIComponent(email)}`, {
+    const res = await fetch(`${API_BASE}/auth/check-email?email=${encodeURIComponent(email)}`, {
       headers: { Accept: "application/json" },
       credentials: "include",
     });
@@ -122,11 +120,11 @@ async function onSubmit(e){
 
   const old = $btn.textContent;
   $btn.disabled = true;
-  $btn.textContent = "…";
+  $btn.textContent = "...";
 
   try {
     await signup(payload);
-    showOk("Compte créé ✔");
+        showOk("Compte cree !");
 
     try {
       const info = await me();
