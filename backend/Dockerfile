@@ -11,13 +11,15 @@ ENV APP_ENV=prod \
     APP_SECRET=change-me \
     DATABASE_URL=sqlite:///var/data.db \
     MAILER_DSN=null://null \
-    CORS_ALLOW_ORIGIN=*
+    CORS_ALLOW_ORIGIN=* \
+    COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_MEMORY_LIMIT=-1
 
 # Copier les fichiers backend (le contexte de build doit être "backend")
 COPY . ./
 
 # Installer les dépendances PHP (ignore ext-mongodb, sans exécuter les scripts pendant le build)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-mongodb --no-scripts
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-mongodb --no-scripts --prefer-dist --no-progress
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
