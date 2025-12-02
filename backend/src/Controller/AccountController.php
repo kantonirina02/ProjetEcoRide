@@ -1,18 +1,11 @@
 ﻿<?php
-
-
-
 namespace App\Controller;
 
-
-
 use App\Entity\Brand;
-
 use App\Entity\Ride;
-
 use App\Entity\User;
-
 use App\Entity\Vehicle;
+
 
 use Doctrine\ORM\EntityManagerInterface;
 
